@@ -285,6 +285,9 @@ flowchart TD
 | 24 | Pi secrets (non-K8s) | **SOPS + age (unified)** | Same tooling as K8s secrets. Pi scripts decrypt at deploy time. SSH keys and API tokens managed via SOPS. |
 | 25 | Project scope | **AI-automated home network** | Not primarily K8s/GitLab. The project manages the entire home network: modem, router, Pis, DNS, bastion, server. |
 | 26 | Secrets file layout | **Single file per tier** | One `secrets.enc.yaml` for all Pi secrets. One per K8s app. Simplicity over organization until it doesn't scale. |
+| 27 | Shell script conventions | **Function-based, idempotent, sourceable** | `set -euo pipefail`, functions with idempotent guards, `main` behind source guard. Maps 1:1 to Ansible tasks. |
+| 28 | CoreDNS config style | **hosts plugin + generated hosts file** | Simpler than RFC zone files. Hosts file generated from inventory. Corefile is static. |
+| 29 | MVP CI strategy | **Local Makefile only (no GitHub Actions)** | Integration/acceptance tests need LAN access to Pis. GHA adds ceremony with no benefit. GitLab CI on LAN post-MVP. |
 
 ## Repository Structure
 
@@ -722,3 +725,193 @@ flowchart TD
 - [ ] `make test-acceptance` passes (DNS resolution, DDNS, SSH from outside)
 - [ ] DHCP DNS pointed to Pi 2, all clients resolving correctly
 - [ ] System stable for 24h with no manual intervention
+
+## Shell Script Conventions
+
+All scripts under `infrastructure/pi-scripts/` follow these conventions for testability and future Ansible migration.
+
+### Script Structure Template
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# --- Functions (testable, sourceable) ---
+
+harden_ssh() {
+    local sshd_config="/etc/ssh/sshd_config"
+
+    # Idempotent guard: check before changing
+    if grep -q "^PasswordAuthentication no" "$sshd_config"; then
+        echo "SSH already hardened, skipping"
+        return 0
+    fi
+
+    sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' "$sshd_config"
+    systemctl reload sshd
+}
+
+install_package() {
+    local pkg="$1"
+    if dpkg -s "$pkg" &>/dev/null; then
+        echo "$pkg already installed, skipping"
+        return 0
+    fi
+    apt-get install -y "$pkg"
+}
+
+# --- Main (not executed when sourced for testing) ---
+
+main() {
+    harden_ssh
+    install_package "unattended-upgrades"
+}
+
+# Only run main if script is executed, not sourced
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
+```
+
+### Convention Rules
+
+| Convention | Why | Ansible equivalent |
+|---|---|---|
+| `set -euo pipefail` | Fail fast on errors, undefined vars, pipe failures | Ansible's default fail-on-error |
+| Functions for every action | bats-core can `source` and test individual functions | Each function = one Ansible task |
+| Idempotent guards (`if already done; return 0`) | Re-running is safe, no side effects | `when:` conditions |
+| `main` guard at bottom | Script can be sourced without executing | N/A (Ansible tasks don't have this problem) |
+| Named local vars (not positional `$1` `$2`) | Clarity, self-documenting | Ansible variable names |
+| `echo` for status | Human-readable output | `changed`/`ok` status |
+| Functions return 0/1, never `exit` | Caller decides how to handle failure | Ansible `ignore_errors` / `failed_when` |
+| `install_package` wrapper | Idempotent package install | `apt: name=X state=present` |
+
+### Ansible Migration Path
+
+When/if the project outgrows shell scripts (many more Pis, more complex orchestration):
+
+| Shell script pattern | Ansible equivalent |
+|---|---|
+| `inventory.sh` (variables) | `inventory.yaml` |
+| `harden_ssh()` function | `task:` with `lineinfile` module |
+| `install_package "coredns"` | `apt: name=coredns state=present` |
+| `if grep -q ...; return 0` | `when: not result.changed` |
+| `setup-bastion.sh` | `playbooks/bastion.yaml` |
+| `deploy-to-pi.sh` | `ansible-playbook -i inventory.yaml` |
+
+## CoreDNS Configuration
+
+### Corefile (static, lives at `/etc/coredns/Corefile`)
+
+```
+mindlikewater.net {
+    hosts /etc/coredns/mindlikewater.hosts {
+        fallthrough
+    }
+    log
+}
+
+. {
+    forward . 1.1.1.1 9.9.9.9
+    cache 30
+    log
+    errors
+}
+```
+
+### Hosts File (generated, lives at `/etc/coredns/mindlikewater.hosts`)
+
+```
+192.168.1.1     router.mindlikewater.net
+192.168.1.10    bastion.mindlikewater.net
+192.168.1.11    dns.mindlikewater.net
+192.168.1.12    bastion-backup.mindlikewater.net
+192.168.1.13    dns-backup.mindlikewater.net
+192.168.1.200   poweredge.mindlikewater.net
+192.168.1.200   k8s.mindlikewater.net
+192.168.1.200   gitlab.mindlikewater.net
+```
+
+### Design Rationale
+
+| Choice | Rationale |
+|---|---|
+| `hosts` plugin (not `file` plugin) | Simpler than RFC zone files. No SOA/NS records needed for internal use. |
+| Separate hosts file (not inline in Corefile) | Generated from `inventory.sh` by `setup-coredns.sh`. Testable in isolation. |
+| `fallthrough` | If a query matches the zone but has no host entry, forward to upstream instead of NXDOMAIN. |
+| `cache 30` | 30-second cache on the forwarder. Keeps upstream queries low without stale results. |
+| `log` on both blocks | Debug visibility during initial setup. Remove from the forwarder block once stable. |
+| Forward to `1.1.1.1 9.9.9.9` | Cloudflare primary, Quad9 fallback. Fast, privacy-focused, reliable. |
+
+### How `setup-coredns.sh` Generates the Hosts File
+
+The script sources `inventory.sh` (which defines all IPs and hostnames), then writes the hosts file:
+
+```bash
+generate_hosts_file() {
+    local output="/etc/coredns/mindlikewater.hosts"
+    local inventory
+    inventory="$(dirname "$0")/../inventory.sh"
+    source "$inventory"
+
+    cat > "$output" <<EOF
+${ROUTER_IP}    router.mindlikewater.net
+${PI1_IP}       bastion.mindlikewater.net
+${PI2_IP}       dns.mindlikewater.net
+${PI3_IP}       bastion-backup.mindlikewater.net
+${PI4_IP}       dns-backup.mindlikewater.net
+${POWEREDGE_IP} poweredge.mindlikewater.net
+${POWEREDGE_IP} k8s.mindlikewater.net
+${POWEREDGE_IP} gitlab.mindlikewater.net
+EOF
+}
+```
+
+This is directly testable with bats-core: mock inventory vars, run the function, assert output.
+
+## Makefile (MVP)
+
+```makefile
+.PHONY: help lint test test-unit test-integration test-acceptance deploy-pi
+
+help: ## Show available targets
+	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | sort | \
+		awk 'BEGIN {FS = ":.*## "}; {printf "  %-20s %s\n", $$1, $$2}'
+
+# --- Quality ---
+
+lint: ## ShellCheck all shell scripts
+	shellcheck infrastructure/pi-scripts/**/*.sh scripts/**/*.sh
+
+# --- Tests ---
+
+test: lint test-unit ## Run lint + unit tests (no Pi needed)
+
+test-unit: ## Run bats-core unit tests
+	bats tests/unit/
+
+test-integration: ## Run goss specs on Pis (requires SSH to Pis)
+	ssh deploy@192.168.1.10 'goss --gossfile /tmp/goss-bastion.yaml validate'
+	ssh deploy@192.168.1.11 'goss --gossfile /tmp/goss-dns.yaml validate'
+
+test-acceptance: ## End-to-end network tests (requires live network)
+	bash tests/acceptance/test_dns_resolution.sh
+	bash tests/acceptance/test_socks_proxy.sh
+
+test-all: lint test-unit test-integration test-acceptance ## Run everything
+
+# --- Deployment ---
+
+deploy-pi: ## Deploy to Pi. Usage: make deploy-pi ROLE=bastion TARGET=192.168.1.10
+	scripts/bootstrap/deploy-to-pi.sh $(ROLE) $(TARGET)
+```
+
+### CI Evolution Path
+
+| Phase | How tests run | Where |
+|---|---|---|
+| **MVP** | `make test` on laptop | Local only |
+| **Post-MVP (GitLab on K8s)** | GitLab CI with self-hosted runner on LAN | Runner can reach Pis for integration/acceptance |
+| **Future** | Push-triggered pipeline: lint + unit in container, integration + acceptance on LAN runner | Full automation |
+
+No GitHub Actions needed at any phase. The Makefile targets become GitLab CI stages with zero rewriting -- each `make` target maps to a CI job.
