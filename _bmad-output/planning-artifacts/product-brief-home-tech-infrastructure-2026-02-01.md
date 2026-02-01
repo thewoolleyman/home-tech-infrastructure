@@ -1,5 +1,6 @@
 ---
-stepsCompleted: [1, 2, 3, 4]
+stepsCompleted: [1, 2, 3, 4, 5, 6]
+status: complete
 inputDocuments:
   - _bmad-output/brainstorming/architecture-diagram.md
   - _bmad-output/brainstorming/brainstorming-session-2026-02-01.md
@@ -156,3 +157,69 @@ Great design, architecture, and developer UX are not afterthoughts -- they are p
 - **Uptime SLA**: This is a home network, not a production service. 99.9% uptime is not a goal.
 - **Performance benchmarks**: DNS and SSH performance are not bottlenecks. If they work, they're fast enough.
 - **Lines of code / velocity**: Irrelevant. Ship the minimum code that passes all tests with great design.
+
+---
+
+## MVP Scope
+
+### Core Features
+
+**Pi 1 -- Bastion + DDNS:**
+- SSH jump host (hardened sshd, key-only auth, no root login)
+- DDNS updater (cron job, updates DNS provider when public IP changes)
+- Firewall rules (iptables, deny-by-default)
+
+**Pi 2 -- DNS:**
+- CoreDNS with split-horizon DNS for `mindlikewater.net`
+- Internal queries resolve to LAN IPs; external queries resolve to public IP
+- Generated hosts file from `inventory.sh`, static Corefile
+
+**Infrastructure Scaffolding:**
+- `inventory.sh` -- single source of truth for all IPs, hostnames, domain, ports
+- SOPS + age secrets management -- single `secrets.enc.yaml` for Pi tier
+- 3-phase deploy pipeline: `decrypt.sh` -> `push.sh` -> `run-setup.sh`
+- Makefile as user interface: `make deploy`, `make test`, `make verify-pi`, `make help`
+
+**Test Pyramid:**
+- Unit tests (bats-core) -- run locally on macOS, mock system paths
+- Integration tests (goss) -- run on real Pi, verify service state
+- Acceptance tests -- `make deploy` on fresh SD card + `make verify-pi` passes
+
+**Hot-Backup Pis (Pi 3, Pi 4):**
+- Identical config to Pi 1/Pi 2 respectively
+- Deployed but not serving traffic until manual cut-over
+- Serve as zero-risk deployment targets and instant rollback
+
+### Out of Scope for MVP
+
+| Item | Rationale |
+|------|-----------|
+| Kubernetes / Talos on PowerEdge | Server is intermittent (not always on). Separate tier, separate milestone. |
+| GitLab deployment | Depends on K8s. Post-MVP. |
+| Router automation (TP-Link API) | Working fine as-is. No urgency. |
+| Modem bridge mode change | One-time manual config. Not worth automating. |
+| Automated hot-backup promotion | MVP cut-over is manual (change DNS pointer). Automated failover is post-MVP. |
+| GitHub Actions CI | MVP uses local `make` targets only. GitLab CI on LAN post-MVP. |
+| Monitoring/alerting dashboard | Health checks exist; a dashboard is nice-to-have, not essential. |
+| Pi-hole or other add-on services | Day 2 evolution. Add after MVP proves the pipeline works. |
+
+### MVP Success Criteria
+
+The MVP is successful when Chad can say:
+
+1. **"I can rebuild any Pi from scratch."** -- `git clone` + `make deploy PI=<target>` on a fresh SD card produces a working Pi with no manual steps.
+2. **"I trust the tests."** -- The test pyramid catches real misconfigurations before they hit the live network.
+3. **"I'm not afraid to make changes."** -- Any modification goes through TDD, deploys to a hot-backup first, and can be rolled back in seconds.
+4. **"The repo IS the documentation."** -- Everything needed to understand and operate the network is in the repo. No tribal knowledge required.
+
+### Future Vision
+
+Post-MVP, the system evolves layer by layer:
+
+1. **Network layer**: Router managed via Python API, modem bridge mode documented
+2. **Server layer**: Talos Linux on PowerEdge, single-node K8s, FluxCD GitOps
+3. **Workload layer**: GitLab Omnibus, then additional services as needed
+4. **Automated failover**: Health checks trigger automatic promotion of hot-backup Pis
+5. **CI pipeline**: GitLab CI on LAN runs the full test pyramid on every push
+
+Each layer follows the same pattern: TDD, deploy to non-production first, cut-over when verified. The MVP pipeline is the template for everything that follows.
