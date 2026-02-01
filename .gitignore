@@ -29,3 +29,9 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+# BEGIN claude-flow-memory-hooks
+.claude-flow/learning/hook_logs/
+.claude-flow/learning/context_bundles/
+.swarm/state.json
+.swarm/schema.sql
+# END claude-flow-memory-hooks
