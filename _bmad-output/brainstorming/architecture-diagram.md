@@ -265,15 +265,98 @@ flowchart TD
 | 12 | TLS certificates | **Self-signed CA + cert-manager** | Automated cert issuance. CA cert installed on client devices once. |
 | 13 | SSH external port | **Non-standard (4222)** | Reduces scanner noise. Not security-through-obscurity (key auth is the real gate). |
 | 14 | Secrets management | **SOPS + age** | Git-committable encryption. 1Password backup for DR. FluxCD native integration. |
+| 15 | K8s repo layout | **onedr0p/cluster-template pattern** | `kubernetes/{apps,bootstrap,components,flux}` -- community standard for Talos+FluxCD homelabs. |
+| 16 | Community charts | **Helm via FluxCD HelmRelease** | cert-manager, MetalLB, ingress via HelmRelease CRD. Version bumps = one-line change. |
+| 17 | Pi configuration | **Ansible (not shell scripts)** | Idempotent, reproducible, handles SD card failure recovery and hot-backup Pi provisioning. |
+| 18 | Dependency updates | **Renovate Bot from day one** | Auto-creates PRs for Helm chart, container image, and Flux component updates. |
+| 19 | CNI | **Talos default + MetalLB** | Start simple. Cilium is powerful but unnecessary complexity for single-node. Can migrate later. |
+| 20 | Talos config mgmt | **talhelper** | Generates Talos machine configs from simpler YAML input. Used by onedr0p template. |
+
+## Repository Structure
+
+```
+home-tech-infrastructure/
+├── _bmad/                          # BMAD framework
+├── _bmad-output/                   # BMAD planning artifacts
+├── reference/                      # Vendor docs
+│
+├── kubernetes/                     # Everything FluxCD manages
+│   ├── apps/                       # Workloads
+│   │   ├── gitlab/
+│   │   │   ├── ks.yaml             # Flux Kustomization
+│   │   │   └── app/
+│   │   │       ├── deployment.yaml # GitLab Omnibus (not Helm)
+│   │   │       ├── secrets.enc.yaml
+│   │   │       └── kustomization.yaml
+│   │   └── ai-agents/
+│   │       └── ...
+│   ├── bootstrap/                  # Flux bootstrap
+│   │   └── kustomization.yaml
+│   ├── components/                 # Reusable Kustomize components
+│   └── flux/                       # Flux system config
+│       └── config/
+│           └── cluster.yaml
+│
+├── infrastructure/                 # Non-K8s infra-as-code
+│   ├── ansible/
+│   │   ├── inventory.yaml          # Pi IPs and roles
+│   │   ├── playbooks/
+│   │   │   ├── bastion.yaml        # Pi 1 setup
+│   │   │   └── dns.yaml            # Pi 2 setup
+│   │   └── roles/
+│   │       ├── common/             # Shared: updates, hardening
+│   │       ├── bastion/            # SSH config, DDNS cron
+│   │       ├── dns/                # CoreDNS install + zone config
+│   │       └── router/             # TP-Link API management
+│   └── talos/
+│       ├── talconfig.yaml          # talhelper config
+│       └── patches/                # Talos config patches
+│
+├── scripts/                        # Operational helpers
+│   ├── bootstrap/
+│   │   ├── generate-age-keypair.sh
+│   │   └── install-ca-cert.sh
+│   └── ddns/
+│       └── update-namecheap.sh     # Deployed by Ansible to Pi 1
+│
+├── .sops.yaml                      # SOPS config (public key only)
+├── .gitignore
+├── CLAUDE.md
+├── Makefile                        # Developer commands
+├── renovate.json                   # Dependency auto-updates
+└── README.md
+```
+
+### Structure Rationale
+
+| Directory | Pattern | Source |
+|-----------|---------|--------|
+| `kubernetes/` | onedr0p/cluster-template convention | Community standard for Talos+FluxCD |
+| `kubernetes/apps/*/ks.yaml` + `app/` | FluxCD Kustomization per-app | onedr0p pattern for dependency ordering |
+| `infrastructure/ansible/` | Ansible for non-K8s hosts | Community consensus over shell scripts |
+| `infrastructure/talos/` | talhelper-managed configs | onedr0p template tooling |
+| `scripts/` | One-off helpers deployed by Ansible | Operational scripts, not run manually |
+| `renovate.json` | Renovate Bot config | Auto-dependency updates from day one |
+
+### What Uses Helm (HelmRelease) vs Raw Manifests (Kustomize)
+
+| Component | Method | Why |
+|-----------|--------|-----|
+| cert-manager | **HelmRelease** | Community chart, complex, version-tracked upstream |
+| MetalLB | **HelmRelease** | Community chart |
+| Ingress controller | **HelmRelease** | Community chart |
+| GitLab Omnibus | **Raw manifests** | Simple Deployment, Chad knows Omnibus internals |
+| AI workloads | **Raw manifests** | Custom, no upstream chart |
+| SOPS age Secret | **Raw manifest** | Bootstrap, one-time |
 
 ## Bootstrap Order
 
 ```mermaid
 flowchart TD
     B1["1. Xfinity Modem → Bridge Mode<br/>(one-time manual toggle)"]
-    B2["2. Archer AXE95 Setup<br/>Static IPs, DHCP range, port forward<br/>(Python scripts or initial manual)"]
-    B3["3. Pi 1 - Bastion<br/>Harden OS, SSH key-only<br/>DDNS cron job"]
-    B4["4. Pi 2 - DNS<br/>CoreDNS with mindlikewater.net zone<br/>Router mgmt scripts"]
+    B2["2. Archer AXE95 Setup<br/>Static IPs, DHCP range, port forward<br/>(Python TP-Link API or initial manual)"]
+    B3["3. Pi 1 - Bastion (Ansible)<br/>Harden OS, SSH key-only<br/>DDNS cron job"]
+    B4["4. Pi 2 - DNS (Ansible)<br/>CoreDNS with mindlikewater.net zone<br/>Router mgmt scripts"]
     B5["5. PowerEdge - Talos Linux<br/>Boot ISO, apply machine config<br/>Verify kubectl access"]
     B6["6. FluxCD Bootstrap<br/>(from GitHub, migrate later)<br/>+ SOPS age secret (manual)"]
     B7["7. cert-manager + CA<br/>Self-signed CA, ClusterIssuer<br/>Install CA on client devices"]
