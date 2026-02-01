@@ -1,0 +1,87 @@
+# generated: 2026-02-01
+# project: home-tech-infrastructure
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog -> in-progress: Automatically when first story is created (via create-story)
+#   - in-progress -> done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-02-01
+project: home-tech-infrastructure
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Repository Foundation & Tooling
+  epic-1: backlog
+  1-1-create-repository-scaffolding-and-makefile: backlog
+  1-2-create-inventory-sh-as-single-source-of-truth: backlog
+  1-3-set-up-tdd-toolchain: backlog
+  1-4-create-readme-with-setup-and-operations-guide: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Secrets Bootstrap
+  epic-2: backlog
+  2-1-generate-age-keypair-and-configure-sops-yaml: backlog
+  2-2-create-and-encrypt-secrets-file: backlog
+  2-3-create-decrypt-script-for-deploy-pipeline: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Bastion & Remote Access
+  epic-3: backlog
+  3-1-create-common-ssh-and-firewall-hardening-script-with-tests: backlog
+  3-2-create-unattended-upgrades-script-with-tests: backlog
+  3-3-create-bastion-setup-script-with-tests: backlog
+  3-4-create-ddns-update-script-with-tests: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: DNS & Name Resolution
+  epic-4: backlog
+  4-1-create-dns-hosts-file-generator-with-tests: backlog
+  4-2-create-coredns-setup-script-with-tests: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Deploy Pipeline & Verification
+  epic-5: backlog
+  5-1-create-pi-image-preparation-script: backlog
+  5-2-create-deploy-pipeline-scripts: backlog
+  5-3-create-deploy-pi-makefile-target-with-idempotency: backlog
+  5-4-create-goss-integration-test-specs: backlog
+  5-5-create-acceptance-tests-and-unified-test-targets: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Hot Backups & Steady-State Operations
+  epic-6: backlog
+  6-1-create-hot-backup-sync-scripts-with-tests: backlog
+  6-2-create-deploy-to-backup-first-workflow: backlog
+  6-3-create-dns-rollback-script-with-tests: backlog
+  6-4-create-health-check-script-with-cron-scheduling: backlog
+  epic-6-retrospective: optional
