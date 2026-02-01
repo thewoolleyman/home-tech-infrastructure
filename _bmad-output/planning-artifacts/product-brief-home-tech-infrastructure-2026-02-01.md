@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2, 3]
+stepsCompleted: [1, 2, 3, 4]
 inputDocuments:
   - _bmad-output/brainstorming/architecture-diagram.md
   - _bmad-output/brainstorming/brainstorming-session-2026-02-01.md
@@ -105,3 +105,54 @@ These are not user personas -- they are non-functional requirements that shape e
 | **Steady state** | DDNS updates via cron. DNS resolves split-horizon. Health checks run on schedule. Chad monitors via `make verify-pi`. | Ongoing health checks |
 | **Failure/Recovery** | Health check detects the issue. Chad runs `make deploy PI=pi1` to restore from known-good state. Or hot-backup Pi is already serving. Recovery is one command. | Same test pyramid validates the fix |
 | **Day 2 evolution** | New requirement (e.g., add Pi-hole, change DDNS provider). Same TDD cycle through the pipeline. Future changes are as safe as the first deploy. | Full pyramid for every change |
+
+---
+
+## Success Metrics
+
+### MVP Completion Criteria
+
+The MVP is done when all of these are true:
+
+| Criterion | How to verify |
+|-----------|---------------|
+| Pi 1 (bastion + DDNS) configured entirely from repo | `make deploy PI=pi1` on a fresh SD card, then `make verify-pi PI=pi1` passes |
+| Pi 2 (CoreDNS split-horizon) configured entirely from repo | `make deploy PI=pi2` on a fresh SD card, then `make verify-pi PI=pi2` passes |
+| All secrets managed via SOPS + age | No plaintext credentials in the repo; `make decrypt` + `make deploy` is the only path |
+| Full test pyramid passes | `make test` (unit), `make test-integration` (goss), `make verify-pi` (acceptance) all green |
+| Recovery from hardware failure is one command | Swap SD card, run `make deploy PI=<target>`, verify -- no manual SSH steps required |
+
+### Operational Metrics (Post-Deploy)
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| DNS resolution (internal) | `mindlikewater.net` resolves correctly from LAN | `make verify-pi PI=pi2` includes dig checks |
+| DNS resolution (external) | External queries get public IP | Same verification suite |
+| DDNS accuracy | Public IP matches DDNS record within 5 minutes of change | Cron job + health check script |
+| Bastion SSH access | SSH jump host reachable from WAN | `make verify-pi PI=pi1` includes SSH connectivity check |
+| Health check pass rate | 100% on steady-state checks | `health-check.sh` via cron, logged |
+
+### Development Experience Metrics
+
+| Metric | Target | How to verify |
+|--------|--------|---------------|
+| Full rebuild from clone | `git clone` + `make deploy` works with zero manual steps | Acceptance test |
+| Test suite runs locally | `make test` passes on macOS (dev) without a Pi | Unit tests with mocked paths |
+| AI tool compatibility | Claude Code can read the repo, write scripts, and run tests without special instructions beyond the README | Manual verification during development |
+| Change safety | Any modification goes through TDD cycle; no untested code reaches a Pi | Code review discipline + test coverage |
+
+### Design Quality (First-Class Goal)
+
+Great design, architecture, and developer UX are not afterthoughts -- they are primary success criteria equal in importance to functional correctness:
+
+- **Clean architecture**: Clear separation of concerns (inventory, secrets, per-role scripts, tests). A new contributor (human or AI) can understand the repo structure in minutes.
+- **Script readability**: Every script reads like documentation. Function names say what they do. No clever tricks, no magic. A sleep-deprived operator at 2am can follow the logic.
+- **Makefile as UX**: `make help` is the entire user interface. Every developer action has a target. No need to memorize raw commands or read source to figure out how to use the system.
+- **Consistent conventions**: All scripts follow the same patterns (function-based, idempotent guards, overridable paths, main guard). Once you've read one script, you can read any of them.
+- **Minimal moving parts**: The simplest solution that works. No unnecessary abstractions, no premature generalization, no tools added "just in case."
+
+### Anti-Metrics (What We Deliberately Don't Measure)
+
+- **Uptime SLA**: This is a home network, not a production service. 99.9% uptime is not a goal.
+- **Performance benchmarks**: DNS and SSH performance are not bottlenecks. If they work, they're fast enough.
+- **Lines of code / velocity**: Irrelevant. Ship the minimum code that passes all tests with great design.
