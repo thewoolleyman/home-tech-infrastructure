@@ -1,8 +1,8 @@
 # home-tech-infrastructure
 
-**A completely AI-automated home network.**
+**A fully automated home network, built and maintained with AI.**
 
-This project manages the entire home network infrastructure as code -- from the cable modem and router through Raspberry Pi services (DNS, bastion, DDNS) to a Kubernetes server running GitLab and AI workloads. The goal is full AI-driven automation: configuration, deployment, monitoring, testing, and self-healing across every network component.
+This project manages the entire home network infrastructure as code -- from the cable modem and router through Raspberry Pi services (DNS, bastion, DDNS) to a Kubernetes server running GitLab and other workloads. AI (Claude Code) is the development tool that writes, tests, and evolves the automation. The running infrastructure uses deterministic, traditional automation (shell scripts, cron, GitOps) with no LLMs in the critical path.
 
 ## What This Manages
 
@@ -12,11 +12,11 @@ This project manages the entire home network infrastructure as code -- from the 
 | Router | TP-Link Archer AXE95 | NAT, DHCP, firewall, WiFi -- managed via Python API |
 | Bastion | Raspberry Pi 1 + hot backup | SSH jump host, DDNS updates |
 | DNS | Raspberry Pi 2 + hot backup | CoreDNS split-horizon for mindlikewater.net |
-| Server | Dell PowerEdge R630 (Talos/K8s) | GitLab, AI workloads (intermittent -- not always on) |
+| Server | Dell PowerEdge R630 (Talos/K8s) | GitLab, other workloads (intermittent -- not always on) |
 
 ## Key Principles
 
-- **AI-automated**: AI agents manage the network, not just the server
+- **AI as developer**: AI builds and evolves the automation; no LLMs in the runtime infrastructure
 - **Infrastructure as code**: Everything in git, nothing configured manually
 - **Test pyramid**: bats-core unit tests, goss integration tests, end-to-end acceptance tests
 - **Secrets in git**: SOPS + age encryption (private key in 1Password, never in repo)

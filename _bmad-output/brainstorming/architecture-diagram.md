@@ -32,7 +32,7 @@ graph TD
                 SOPS_SECRET["SOPS + age<br/>In-cluster Secret<br/>(bootstrap: manual)"]
                 CERTMGR["cert-manager<br/>Self-signed CA<br/>Auto-issues TLS certs"]
                 GITLAB["GitLab Omnibus Container<br/>gitlab.mindlikewater.net<br/>(not Helm chart)<br/>Git + CI/CD + Registry"]
-                AI["AI Agentic Workloads<br/>Programmatic K8s access"]
+                AI["Future Workloads<br/>(no LLM runtime dependency)"]
                 INGRESS["Ingress Controller<br/>(Traefik or nginx)"]
                 METALLB["MetalLB<br/>LB IPs: .220-.239"]
             end
@@ -411,7 +411,7 @@ flowchart TD
     B7["7. FluxCD Bootstrap<br/>(from GitHub, migrate later)<br/>+ SOPS age secret (manual)"]
     B8["8. cert-manager + CA<br/>Self-signed CA, ClusterIssuer<br/>Install CA on client devices"]
     B9["9. GitLab Deployment<br/>Omnibus container via FluxCD<br/>gitlab.mindlikewater.net"]
-    B10["10. AI Agentic Workloads<br/>Deploy via FluxCD"]
+    B10["10. Future Workloads<br/>Deploy via FluxCD"]
     B11["11. Migrate FluxCD source<br/>GitHub → self-hosted GitLab"]
 
     B1 --> B2 --> B3 --> B4 --> B4B --> B5 --> B6 --> B7 --> B8 --> B9 --> B10 --> B11
