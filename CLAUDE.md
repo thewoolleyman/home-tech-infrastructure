@@ -699,6 +699,77 @@ This includes:
 
 Remember: **Claude Flow CLI coordinates, Claude Code Task tool creates!**
 
+## MANDATORY: TDD + Pair Programming
+
+> Adapted from: https://github.com/thewoolleyman/personal-knowledge-base/blob/main/CLAUDE.md
+
+ALL code in this project MUST be developed using strict TDD:
+1. Write a failing test FIRST (RED)
+2. Write minimum code to pass (GREEN)
+3. Refactor with tests passing (REFACTOR)
+4. No code without a test. No exceptions.
+
+General testing conventions:
+- Tests live alongside source code or in a dedicated `tests/` directory
+- Interfaces/abstractions for all external dependencies (mockable)
+- Table-driven / parameterized tests for multiple cases
+- 100% line coverage on new code -- every line exists because a test demanded it
+- Entry points (`main()`, CLI handlers) are thin wrappers calling testable functions
+- Never use fatal exits or process termination outside of entry points -- return errors instead
+- All OS/system/network interaction behind interfaces -- mock in tests
+
+### Testing Pyramid (CRITICAL -- read this before writing any test)
+
+This project uses a testing pyramid. Each level has a different purpose:
+
+**Unit tests (bottom -- many, fast, isolated):**
+- Test individual functions and methods with mocks/stubs
+- Cover internal logic, edge cases, error handling
+- Run fast, no external dependencies
+
+**Component integration tests (middle -- fewer, test real interactions):**
+- Test that real components work together (e.g., service + real API)
+- May require credentials, network access, or external services
+- Use build tags or test markers to separate from unit tests
+
+**Acceptance tests (top -- fewest, test from the USER'S perspective):**
+- Test the ACTUAL USER EXPERIENCE of the application
+- For CLI apps: build the real binary, run it with real arguments, check stdout/stderr/exit codes
+- For web apps: HTTP requests to the real server, check responses
+- These tests do exactly what a human would do when following the README
+- Use build tags or test markers to separate from other tests
+
+### THE RULE FOR ACCEPTANCE TESTS:
+**If a human follows the README and gets an error, an acceptance test MUST catch it.**
+
+Acceptance tests must:
+1. Build/start the actual application
+2. Exercise it as a subprocess or HTTP client -- the same way a user does
+3. Check outputs, exit codes, responses
+4. NEVER import internal packages or call functions directly
+5. Treat the application as a black box
+
+If a test imports internal code and calls functions directly, it is NOT an acceptance
+test. It may be a useful unit or integration test, but it does not verify that the
+software is usable from a human's perspective.
+
+### When to write which:
+- New internal function -> unit test
+- New connector/API/service integration -> component integration test
+- New CLI command or user-facing behavior -> acceptance test
+- Updating the README with new instructions -> acceptance test that mirrors those instructions
+
+### Makefile (MANDATORY)
+
+All developer-facing commands live in a `Makefile`. Run `make help` to discover them.
+
+Rules:
+- When adding a new tool, task, or workflow that a developer would run, add a Makefile target for it
+- When adding a new test category, add a `make test-*` target
+- The README must reference `make` targets, not raw tool commands
+- CI workflows should call `make` targets where possible
+- Keep targets simple -- each one should be one or two commands, not a script
+
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.
