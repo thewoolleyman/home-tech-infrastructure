@@ -29,8 +29,8 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
-# BMAD Method generated output
-_bmad-output/
+# BMAD Method generated output - tracked for this project
+# _bmad-output/
 
 # BEGIN claude-flow-memory-hooks
 .claude-flow/learning/hook_logs/
