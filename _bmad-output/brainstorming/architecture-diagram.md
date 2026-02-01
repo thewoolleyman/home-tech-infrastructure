@@ -288,6 +288,10 @@ flowchart TD
 | 27 | Shell script conventions | **Function-based, idempotent, sourceable** | `set -euo pipefail`, functions with idempotent guards, `main` behind source guard. Maps 1:1 to Ansible tasks. |
 | 28 | CoreDNS config style | **hosts plugin + generated hosts file** | Simpler than RFC zone files. Hosts file generated from inventory. Corefile is static. |
 | 29 | MVP CI strategy | **Local Makefile only (no GitHub Actions)** | Integration/acceptance tests need LAN access to Pis. GHA adds ceremony with no benefit. GitLab CI on LAN post-MVP. |
+| 30 | Pi base image | **RPi OS Lite 64-bit (Bookworm)** | Minimal, arm64, no desktop. CoreDNS and goss are arm64 binaries. |
+| 31 | Deploy pipeline | **3-phase (decrypt → push → run)** | Each phase testable independently. Clear failure points. Secrets shredded after push. |
+| 32 | Pi smoke test | **`make verify-pi` (goss on Pi)** | Runs goss immediately after deploy, before connecting to network. Catches setup failures early. |
+| 33 | MVP health monitoring | **`make health-check` script via cron** | Simple DNS + SSH + process checks every 15 min for 24h after cut-over. No monitoring stack for MVP. |
 
 ## Repository Structure
 
@@ -319,7 +323,8 @@ home-tech-infrastructure/
 │   │   ├── inventory.sh            # Pi IPs, roles, hostnames
 │   │   ├── common/                 # Shared: updates, hardening, user setup
 │   │   │   ├── harden.sh
-│   │   │   └── unattended-upgrades.sh
+│   │   │   ├── unattended-upgrades.sh
+│   │   │   └── setup-goss.sh       # Install goss for integration testing
 │   │   ├── bastion/                # Pi 1 + Pi 3 (hot backup)
 │   │   │   ├── setup-bastion.sh    # SSH hardening, key-only auth
 │   │   │   └── setup-ddns.sh       # DDNS cron job
@@ -336,8 +341,14 @@ home-tech-infrastructure/
 ├── scripts/                        # Operational helpers
 │   ├── bootstrap/
 │   │   ├── generate-age-keypair.sh
-│   │   ├── install-ca-cert.sh
-│   │   └── deploy-to-pi.sh        # Push scripts to Pis via scp + run
+│   │   └── install-ca-cert.sh
+│   ├── deploy/                     # 3-phase deploy pipeline
+│   │   ├── decrypt.sh              # Phase 1: SOPS decrypt to temp
+│   │   ├── push.sh                 # Phase 2: scp to Pi
+│   │   ├── run-setup.sh            # Phase 3: ssh + run on Pi
+│   │   └── prep-pi-image.sh        # First-boot checklist for new Pi
+│   ├── ops/
+│   │   └── health-check.sh         # Health check (DNS, SSH, CoreDNS)
 │   └── ddns/
 │       └── update-namecheap.sh     # Deployed to Pi 1 by setup script
 │
@@ -681,21 +692,22 @@ age.key
 ```mermaid
 flowchart TD
     M0["0. Generate age keypair<br/>Back up to 1Password<br/>Create .sops.yaml"]
-    M1["1. Repo scaffolding<br/>Makefile, tests/, infrastructure/pi-scripts/<br/>Install bats-core, shellcheck"]
-    M2["2. Write common hardening scripts<br/>+ bats-core unit tests<br/>(harden.sh, unattended-upgrades.sh)"]
-    M3["3. Write bastion scripts<br/>+ bats-core unit tests<br/>(setup-bastion.sh, setup-ddns.sh)"]
-    M4["4. Write DNS scripts<br/>+ bats-core unit tests<br/>(setup-coredns.sh, CoreDNS zone config)"]
+    M1["1. Repo scaffolding<br/>Makefile, tests/, infrastructure/pi-scripts/<br/>Install bats-core, shellcheck, goss"]
+    M2["2. Write common scripts + tests<br/>harden.sh, unattended-upgrades.sh<br/>goss install (common/setup-goss.sh)"]
+    M3["3. Write bastion scripts + tests<br/>setup-bastion.sh, setup-ddns.sh"]
+    M4["4. Write DNS scripts + tests<br/>setup-coredns.sh, CoreDNS zone config"]
     M5["5. Encrypt secrets<br/>CI/deploy SSH key, DDNS password<br/>into secrets.enc.yaml"]
-    M6["6. Write deploy-to-pi.sh<br/>Decrypts secrets, scp to Pi, runs setup<br/>+ bats-core tests for deploy logic"]
-    M7["7. Flash Pi, deploy on desk<br/>Run scripts, verify with goss<br/>(not on network yet)"]
-    M8["8. Connect Pi 2 to LAN<br/>Test manually: dig @192.168.1.11<br/>(existing DHCP DNS unchanged)"]
+    M6["6. Write deploy pipeline<br/>decrypt.sh → push.sh → run-setup.sh<br/>+ bats-core tests for each phase"]
+    M7["7. Flash Pi (RPi OS Lite 64-bit)<br/>make prep-pi-image ROLE=bastion<br/>(enable SSH, set static IP, add deploy key)"]
+    M7B["7b. Deploy + verify on desk<br/>make deploy-pi ROLE=bastion TARGET=IP<br/>make verify-pi TARGET=IP<br/>(not on network yet)"]
+    M8["8. Connect Pi 2 to LAN<br/>make verify-pi TARGET=192.168.1.11<br/>(existing DHCP DNS unchanged)"]
     M9["9. Connect Pi 1 to LAN<br/>Add router port forward :4222<br/>Test SSH from outside"]
-    M10["10. Run acceptance tests<br/>DNS resolution, SOCKS proxy, DDNS"]
-    M11["11. CUT-OVER: Point DHCP DNS to Pi 2<br/>(reversible in seconds)"]
-    M12["12. Verify everything works<br/>Re-run full acceptance suite<br/>Monitor for 24h"]
+    M10["10. Run acceptance tests<br/>make test-acceptance<br/>(DNS resolution, SOCKS proxy)"]
+    M11["11. CUT-OVER: Point DHCP DNS to Pi 2<br/>(see Rollback Procedure below)"]
+    M12["12. Verify + health check<br/>make test-acceptance<br/>make health-check (cron every 15 min for 24h)"]
 
-    M0 --> M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7
-    M7 --> M8 --> M9 --> M10 --> M11 --> M12
+    M0 --> M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7 --> M7B
+    M7B --> M8 --> M9 --> M10 --> M11 --> M12
 
     style M0 fill:#888,stroke:#333,color:#fff
     style M1 fill:#888,stroke:#333,color:#fff
@@ -705,6 +717,7 @@ flowchart TD
     style M5 fill:#96f,stroke:#333,color:#fff
     style M6 fill:#96f,stroke:#333,color:#fff
     style M7 fill:#0a0,stroke:#333,color:#fff
+    style M7B fill:#0a0,stroke:#333,color:#fff
     style M8 fill:#69f,stroke:#333
     style M9 fill:#f96,stroke:#333
     style M10 fill:#0a0,stroke:#333,color:#fff
@@ -716,15 +729,128 @@ flowchart TD
 
 - [ ] age keypair generated, backed up to 1Password, `.sops.yaml` committed
 - [ ] `secrets.enc.yaml` committed with CI/deploy SSH key + DDNS password
-- [ ] All Pi setup scripts written with function-based structure
+- [ ] All Pi setup scripts written with function-based structure (overridable paths for testing)
 - [ ] `make lint` passes (shellcheck on all scripts)
 - [ ] `make test-unit` passes (bats-core tests for all script functions)
-- [ ] `make deploy-pi ROLE=bastion TARGET=192.168.1.10` works
+- [ ] `make deploy-pi ROLE=bastion TARGET=192.168.1.10` works (3-phase: decrypt, push, run)
 - [ ] `make deploy-pi ROLE=dns TARGET=192.168.1.11` works
-- [ ] `make test-integration` passes (goss on both Pis)
-- [ ] `make test-acceptance` passes (DNS resolution, DDNS, SSH from outside)
+- [ ] `make verify-pi TARGET=192.168.1.10` passes (goss on Pi after deploy, before network)
+- [ ] `make test-integration` passes (goss on both Pis from laptop)
+- [ ] `make test-acceptance` passes (DNS resolution, SOCKS proxy)
 - [ ] DHCP DNS pointed to Pi 2, all clients resolving correctly
-- [ ] System stable for 24h with no manual intervention
+- [ ] `make health-check` runs every 15 min for 24h with no failures
+- [ ] Rollback procedure documented and tested
+
+### Pi Base Image
+
+**Raspberry Pi OS Lite (64-bit, Debian Bookworm)** -- no desktop, arm64, minimal.
+
+The `make prep-pi-image` target runs a checklist script that configures a freshly flashed SD card:
+
+| Setting | How |
+|---|---|
+| Enable SSH | Touch `/boot/ssh` on the SD card |
+| Set hostname | Write to `/boot/hostname` or `raspi-config` on first boot |
+| Static IP | Configure in `/etc/dhcpcd.conf` (or via router DHCP reservation) |
+| Deploy user | Create `deploy` user, add CI/deploy public key to `authorized_keys` |
+| Locale/timezone | Set via `raspi-config` noninteractive |
+
+This is a manual flash + scripted first-boot config for MVP. Full automated imaging (Packer, pi-gen) is post-MVP.
+
+### Deploy Pipeline (3-Phase)
+
+The deploy process is split into three independently testable phases:
+
+```
+make deploy-pi ROLE=bastion TARGET=192.168.1.10
+    │
+    ├── Phase 1: decrypt (local)
+    │   scripts/deploy/decrypt.sh
+    │   → Decrypts secrets.enc.yaml to temp dir
+    │   → Extracts role-specific secrets
+    │
+    ├── Phase 2: push (local → Pi)
+    │   scripts/deploy/push.sh ROLE TARGET
+    │   → scp setup scripts to Pi:/opt/pi-setup/
+    │   → scp decrypted secrets to Pi (strict perms)
+    │
+    └── Phase 3: run (on Pi)
+        scripts/deploy/run-setup.sh ROLE TARGET
+        → ssh deploy@TARGET 'sudo /opt/pi-setup/main.sh'
+        → Shreds local decrypted secrets after success
+```
+
+Each phase can fail independently with clear error messages. Phase 1 is fully testable locally. Phase 2 and 3 require Pi access.
+
+### Rollback Procedure
+
+**If anything fails after DHCP cut-over (step 11):**
+
+```bash
+# IMMEDIATE ROLLBACK: Revert DHCP DNS to router default
+# Option A: Via router admin UI
+#   Router admin → DHCP settings → DNS server → remove 192.168.1.11 → save
+#
+# Option B: Via Python TP-Link API (if Pi 2 is still reachable)
+#   python scripts/router/revert-dns.py
+#
+# All clients will revert to using the router's upstream DNS within
+# their DHCP lease renewal period (or immediately on reconnect).
+
+# VERIFY ROLLBACK:
+dig @192.168.1.1 google.com   # Router DNS should resolve
+# Wait for clients to renew DHCP or reconnect WiFi
+```
+
+**Rollback is safe because:**
+- Pi DNS is additive (it doesn't replace the router's DNS, it supplements it)
+- Removing Pi from DHCP DNS config reverts all clients on next DHCP renewal
+- No data is lost -- Pi config stays intact for debugging
+
+### Health Check (24h Monitoring)
+
+A simple script run via cron on the laptop (or any LAN device) during the 24h stabilization period:
+
+```bash
+#!/usr/bin/env bash
+# health-check.sh - verify Pi infrastructure is healthy
+set -euo pipefail
+
+FAILURES=0
+
+# DNS resolution via Pi 2
+if ! dig @192.168.1.11 gitlab.mindlikewater.net +short | grep -q "192.168.1.200"; then
+    echo "FAIL: Pi DNS not resolving gitlab.mindlikewater.net"
+    FAILURES=$((FAILURES + 1))
+fi
+
+# Pi 1 SSH reachable
+if ! ssh -o ConnectTimeout=5 deploy@192.168.1.10 'true' 2>/dev/null; then
+    echo "FAIL: Pi 1 (bastion) SSH unreachable"
+    FAILURES=$((FAILURES + 1))
+fi
+
+# Pi 2 SSH reachable
+if ! ssh -o ConnectTimeout=5 deploy@192.168.1.11 'true' 2>/dev/null; then
+    echo "FAIL: Pi 2 (DNS) SSH unreachable"
+    FAILURES=$((FAILURES + 1))
+fi
+
+# CoreDNS process running on Pi 2
+if ! ssh deploy@192.168.1.11 'pgrep coredns' &>/dev/null; then
+    echo "FAIL: CoreDNS not running on Pi 2"
+    FAILURES=$((FAILURES + 1))
+fi
+
+if [ "$FAILURES" -eq 0 ]; then
+    echo "OK: $(date)"
+else
+    echo "ALERT: $FAILURES checks failed at $(date)"
+    exit 1
+fi
+```
+
+Run via: `make health-check` or cron `*/15 * * * * /path/to/health-check.sh >> /tmp/pi-health.log 2>&1`
 
 ## Shell Script Conventions
 
@@ -736,19 +862,24 @@ All scripts under `infrastructure/pi-scripts/` follow these conventions for test
 #!/usr/bin/env bash
 set -euo pipefail
 
+# --- Overridable paths (for testing -- bats sets these to temp dirs) ---
+SSHD_CONFIG="${SSHD_CONFIG:-/etc/ssh/sshd_config}"
+SYSTEMCTL="${SYSTEMCTL:-systemctl}"
+
+# --- Project root (works when sourced from bats or run directly) ---
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+
 # --- Functions (testable, sourceable) ---
 
 harden_ssh() {
-    local sshd_config="/etc/ssh/sshd_config"
-
     # Idempotent guard: check before changing
-    if grep -q "^PasswordAuthentication no" "$sshd_config"; then
+    if grep -q "^PasswordAuthentication no" "$SSHD_CONFIG"; then
         echo "SSH already hardened, skipping"
         return 0
     fi
 
-    sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' "$sshd_config"
-    systemctl reload sshd
+    sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' "$SSHD_CONFIG"
+    $SYSTEMCTL reload sshd
 }
 
 install_package() {
@@ -773,6 +904,43 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 fi
 ```
 
+### Testing Pattern (bats-core)
+
+```bash
+#!/usr/bin/env bats
+# tests/unit/test_harden.bats
+
+setup() {
+    # Create temp dir for test isolation
+    TEST_DIR="$(mktemp -d)"
+    # Create fake sshd_config
+    echo "PasswordAuthentication yes" > "$TEST_DIR/sshd_config"
+    # Override paths so script writes to temp, not real /etc/
+    export SSHD_CONFIG="$TEST_DIR/sshd_config"
+    export SYSTEMCTL="true"  # no-op stub for systemctl
+    export PROJECT_ROOT="$BATS_TEST_DIRNAME/../.."
+    # Source the script under test (does NOT execute main)
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/common/harden.sh"
+}
+
+teardown() {
+    rm -rf "$TEST_DIR"
+}
+
+@test "harden_ssh disables password auth" {
+    run harden_ssh
+    [ "$status" -eq 0 ]
+    grep -q "PasswordAuthentication no" "$SSHD_CONFIG"
+}
+
+@test "harden_ssh is idempotent" {
+    harden_ssh  # first run
+    run harden_ssh  # second run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"already hardened"* ]]
+}
+```
+
 ### Convention Rules
 
 | Convention | Why | Ansible equivalent |
@@ -781,10 +949,57 @@ fi
 | Functions for every action | bats-core can `source` and test individual functions | Each function = one Ansible task |
 | Idempotent guards (`if already done; return 0`) | Re-running is safe, no side effects | `when:` conditions |
 | `main` guard at bottom | Script can be sourced without executing | N/A (Ansible tasks don't have this problem) |
+| **Overridable paths via env vars** | Tests redirect to temp dirs; production uses defaults | Ansible module paths |
+| **`SYSTEMCTL`, `SCP` etc. as overridable vars** | Tests stub to `true` or mock scripts | Ansible `check_mode` |
+| **`PROJECT_ROOT` via `BASH_SOURCE`** | Works when sourced from bats AND when run directly | N/A |
 | Named local vars (not positional `$1` `$2`) | Clarity, self-documenting | Ansible variable names |
 | `echo` for status | Human-readable output | `changed`/`ok` status |
 | Functions return 0/1, never `exit` | Caller decides how to handle failure | Ansible `ignore_errors` / `failed_when` |
 | `install_package` wrapper | Idempotent package install | `apt: name=X state=present` |
+
+### inventory.sh Contract
+
+All scripts source `inventory.sh` for IPs, hostnames, and roles. This is the single source of truth.
+
+```bash
+#!/usr/bin/env bash
+# infrastructure/pi-scripts/inventory.sh
+# Single source of truth for all Pi and network configuration.
+# Sourced by: setup scripts, deploy scripts, CoreDNS generator, tests.
+
+# --- Network ---
+export DOMAIN="mindlikewater.net"
+export ROUTER_IP="192.168.1.1"
+
+# --- Pis ---
+export PI1_IP="192.168.1.10"
+export PI1_HOSTNAME="bastion"
+export PI1_ROLE="bastion"
+
+export PI2_IP="192.168.1.11"
+export PI2_HOSTNAME="dns"
+export PI2_ROLE="dns"
+
+export PI3_IP="192.168.1.12"
+export PI3_HOSTNAME="bastion-backup"
+export PI3_ROLE="bastion"
+
+export PI4_IP="192.168.1.13"
+export PI4_HOSTNAME="dns-backup"
+export PI4_ROLE="dns"
+
+# --- Server ---
+export POWEREDGE_IP="192.168.1.200"
+
+# --- DNS upstream ---
+export DNS_UPSTREAM_1="1.1.1.1"
+export DNS_UPSTREAM_2="9.9.9.9"
+
+# --- Deploy user ---
+export DEPLOY_USER="deploy"
+```
+
+Every consumer (`setup-coredns.sh`, `deploy-to-pi.sh`, `test_dns_resolution.sh`, etc.) sources this file via `source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"`. Tests can override individual vars after sourcing.
 
 ### Ansible Migration Path
 
@@ -845,34 +1060,34 @@ mindlikewater.net {
 
 ### How `setup-coredns.sh` Generates the Hosts File
 
-The script sources `inventory.sh` (which defines all IPs and hostnames), then writes the hosts file:
+The script sources `inventory.sh` via `PROJECT_ROOT` (not `dirname $0`, which breaks when sourced from bats):
 
 ```bash
-generate_hosts_file() {
-    local output="/etc/coredns/mindlikewater.hosts"
-    local inventory
-    inventory="$(dirname "$0")/../inventory.sh"
-    source "$inventory"
+COREDNS_HOSTS="${COREDNS_HOSTS:-/etc/coredns/mindlikewater.hosts}"
 
-    cat > "$output" <<EOF
-${ROUTER_IP}    router.mindlikewater.net
-${PI1_IP}       bastion.mindlikewater.net
-${PI2_IP}       dns.mindlikewater.net
-${PI3_IP}       bastion-backup.mindlikewater.net
-${PI4_IP}       dns-backup.mindlikewater.net
-${POWEREDGE_IP} poweredge.mindlikewater.net
-${POWEREDGE_IP} k8s.mindlikewater.net
-${POWEREDGE_IP} gitlab.mindlikewater.net
+generate_hosts_file() {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+
+    cat > "$COREDNS_HOSTS" <<EOF
+${ROUTER_IP}    router.${DOMAIN}
+${PI1_IP}       ${PI1_HOSTNAME}.${DOMAIN}
+${PI2_IP}       ${PI2_HOSTNAME}.${DOMAIN}
+${PI3_IP}       ${PI3_HOSTNAME}.${DOMAIN}
+${PI4_IP}       ${PI4_HOSTNAME}.${DOMAIN}
+${POWEREDGE_IP} poweredge.${DOMAIN}
+${POWEREDGE_IP} k8s.${DOMAIN}
+${POWEREDGE_IP} gitlab.${DOMAIN}
 EOF
 }
 ```
 
-This is directly testable with bats-core: mock inventory vars, run the function, assert output.
+Testable with bats-core: set `COREDNS_HOSTS` to a temp file, source the script, run the function, assert output contains expected lines.
 
 ## Makefile (MVP)
 
 ```makefile
-.PHONY: help lint test test-unit test-integration test-acceptance deploy-pi
+.PHONY: help lint test test-unit test-integration test-acceptance test-all \
+        deploy-pi verify-pi prep-pi-image health-check
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | sort | \
@@ -891,8 +1106,8 @@ test-unit: ## Run bats-core unit tests
 	bats tests/unit/
 
 test-integration: ## Run goss specs on Pis (requires SSH to Pis)
-	ssh deploy@192.168.1.10 'goss --gossfile /tmp/goss-bastion.yaml validate'
-	ssh deploy@192.168.1.11 'goss --gossfile /tmp/goss-dns.yaml validate'
+	ssh deploy@192.168.1.10 'goss --gossfile /opt/pi-setup/goss.yaml validate'
+	ssh deploy@192.168.1.11 'goss --gossfile /opt/pi-setup/goss.yaml validate'
 
 test-acceptance: ## End-to-end network tests (requires live network)
 	bash tests/acceptance/test_dns_resolution.sh
@@ -902,8 +1117,21 @@ test-all: lint test-unit test-integration test-acceptance ## Run everything
 
 # --- Deployment ---
 
-deploy-pi: ## Deploy to Pi. Usage: make deploy-pi ROLE=bastion TARGET=192.168.1.10
-	scripts/bootstrap/deploy-to-pi.sh $(ROLE) $(TARGET)
+prep-pi-image: ## Checklist for flashing a new Pi SD card. Usage: make prep-pi-image ROLE=bastion
+	scripts/deploy/prep-pi-image.sh $(ROLE)
+
+deploy-pi: ## Deploy to Pi (3-phase). Usage: make deploy-pi ROLE=bastion TARGET=192.168.1.10
+	scripts/deploy/decrypt.sh
+	scripts/deploy/push.sh $(ROLE) $(TARGET)
+	scripts/deploy/run-setup.sh $(ROLE) $(TARGET)
+
+verify-pi: ## Smoke test a Pi after deploy. Usage: make verify-pi TARGET=192.168.1.10
+	ssh deploy@$(TARGET) 'goss --gossfile /opt/pi-setup/goss.yaml validate'
+
+# --- Operations ---
+
+health-check: ## Run health checks (DNS, SSH, CoreDNS process)
+	scripts/ops/health-check.sh
 ```
 
 ### CI Evolution Path
