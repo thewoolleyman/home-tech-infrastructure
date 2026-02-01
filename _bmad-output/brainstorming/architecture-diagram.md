@@ -284,6 +284,7 @@ flowchart TD
 | 23 | Infrastructure testing | **Full test pyramid** | bats-core for shell script unit tests, goss for host verification, integration tests against real Pis. |
 | 24 | Pi secrets (non-K8s) | **SOPS + age (unified)** | Same tooling as K8s secrets. Pi scripts decrypt at deploy time. SSH keys and API tokens managed via SOPS. |
 | 25 | Project scope | **AI-automated home network** | Not primarily K8s/GitLab. The project manages the entire home network: modem, router, Pis, DNS, bastion, server. |
+| 26 | Secrets file layout | **Single file per tier** | One `secrets.enc.yaml` for all Pi secrets. One per K8s app. Simplicity over organization until it doesn't scale. |
 
 ## Repository Structure
 
@@ -563,16 +564,33 @@ flowchart TD
     style DR fill:#0a8,stroke:#333,color:#fff
 ```
 
+### SSH Key Strategy
+
+Three keypairs, each with a distinct purpose:
+
+| Key | Purpose | Private key location | In SOPS? |
+|-----|---------|---------------------|----------|
+| Personal key(s) | Manual SSH from laptops | Laptops + 1Password | No |
+| CI/deploy key | `deploy-to-pi.sh`, goss tests, acceptance tests | SOPS-encrypted in repo + CI runner | **Yes** |
+| Pi host keys (backup) | Prevent MITM warnings after Pi re-flash | On each Pi (+ SOPS backup in repo) | **Yes** |
+
+- SSH **public** keys (authorized_keys) are not secret -- committed to git unencrypted
+- CI/deploy **private** key is the only SSH private key in SOPS
+- Personal private keys never touch the repo or SOPS
+
 ### What Gets Encrypted
+
+Single file for all Pi secrets: `infrastructure/pi-scripts/secrets.enc.yaml`
 
 | Secret | Tier | Encrypted file | Used by |
 |--------|------|----------------|---------|
+| CI/deploy SSH private key | Pi | `infrastructure/pi-scripts/secrets.enc.yaml` | deploy-to-pi.sh, CI, goss, acceptance tests |
+| Namecheap DDNS password | Pi | `infrastructure/pi-scripts/secrets.enc.yaml` | Pi 1 DDNS cron |
+| Router admin password | Pi | `infrastructure/pi-scripts/secrets.enc.yaml` | Pi 2 router mgmt scripts |
+| Pi host key backups | Pi | `infrastructure/pi-scripts/secrets.enc.yaml` | Pi re-flash recovery |
 | GitLab root password | K8s | `kubernetes/apps/gitlab/app/secrets.enc.yaml` | GitLab Omnibus container |
 | GitLab runner token | K8s | `kubernetes/apps/gitlab/app/secrets.enc.yaml` | CI runners |
 | Self-signed CA private key | K8s | `kubernetes/components/cert-manager/secrets.enc.yaml` | cert-manager |
-| Namecheap DDNS token | Pi | `infrastructure/pi-scripts/secrets.enc.yaml` | Pi 1 DDNS cron |
-| Router admin password | Pi | `infrastructure/pi-scripts/secrets.enc.yaml` | Pi 2 router mgmt scripts |
-| SSH authorized keys | Pi | `infrastructure/pi-scripts/secrets.enc.yaml` | All Pis (bastion, DNS, backups) |
 | age private key | N/A | **Never in git** | SOPS decrypt operations |
 
 ### Bootstrap Procedure
@@ -637,3 +655,70 @@ age.key
 - **Sync direction**: One-way (primary → backup). Backup is read-only replica.
 - **DNS failover**: DHCP gives clients both Pi 2 and Pi 4 as DNS servers. If Pi 2 dies, clients auto-fallback to Pi 4.
 - **Bastion failover**: Manual for now (update router port forward to .12). Keepalived/VRRP is a future option for automatic failover.
+
+## MVP: Pi Infrastructure Layer
+
+**Goal**: Get Pi 1 (bastion+DDNS) and Pi 2 (DNS) running with full test coverage, without breaking the existing network. No K8s, no modem/router changes required.
+
+### MVP Scope
+
+| In scope | Out of scope (later increments) |
+|----------|--------------------------------|
+| age keypair + SOPS bootstrap | K8s / Talos / PowerEdge |
+| Repo scaffolding (Makefile, tests/) | Bridge mode toggle |
+| Pi setup scripts + bats-core tests | Hot-backup Pis (Pi 3+4) |
+| Single `secrets.enc.yaml` for Pi tier | GitLab, AI workloads |
+| Deploy Pi 1 (bastion) + Pi 2 (DNS) | FluxCD, cert-manager |
+| goss integration tests on Pis | Renovate Bot |
+| Acceptance tests (DNS, SSH, DDNS) | Router management automation |
+| DHCP cut-over to Pi DNS | |
+
+### MVP Steps
+
+```mermaid
+flowchart TD
+    M0["0. Generate age keypair<br/>Back up to 1Password<br/>Create .sops.yaml"]
+    M1["1. Repo scaffolding<br/>Makefile, tests/, infrastructure/pi-scripts/<br/>Install bats-core, shellcheck"]
+    M2["2. Write common hardening scripts<br/>+ bats-core unit tests<br/>(harden.sh, unattended-upgrades.sh)"]
+    M3["3. Write bastion scripts<br/>+ bats-core unit tests<br/>(setup-bastion.sh, setup-ddns.sh)"]
+    M4["4. Write DNS scripts<br/>+ bats-core unit tests<br/>(setup-coredns.sh, CoreDNS zone config)"]
+    M5["5. Encrypt secrets<br/>CI/deploy SSH key, DDNS password<br/>into secrets.enc.yaml"]
+    M6["6. Write deploy-to-pi.sh<br/>Decrypts secrets, scp to Pi, runs setup<br/>+ bats-core tests for deploy logic"]
+    M7["7. Flash Pi, deploy on desk<br/>Run scripts, verify with goss<br/>(not on network yet)"]
+    M8["8. Connect Pi 2 to LAN<br/>Test manually: dig @192.168.1.11<br/>(existing DHCP DNS unchanged)"]
+    M9["9. Connect Pi 1 to LAN<br/>Add router port forward :4222<br/>Test SSH from outside"]
+    M10["10. Run acceptance tests<br/>DNS resolution, SOCKS proxy, DDNS"]
+    M11["11. CUT-OVER: Point DHCP DNS to Pi 2<br/>(reversible in seconds)"]
+    M12["12. Verify everything works<br/>Re-run full acceptance suite<br/>Monitor for 24h"]
+
+    M0 --> M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7
+    M7 --> M8 --> M9 --> M10 --> M11 --> M12
+
+    style M0 fill:#888,stroke:#333,color:#fff
+    style M1 fill:#888,stroke:#333,color:#fff
+    style M2 fill:#0a8,stroke:#333,color:#fff
+    style M3 fill:#f96,stroke:#333
+    style M4 fill:#69f,stroke:#333
+    style M5 fill:#96f,stroke:#333,color:#fff
+    style M6 fill:#96f,stroke:#333,color:#fff
+    style M7 fill:#0a0,stroke:#333,color:#fff
+    style M8 fill:#69f,stroke:#333
+    style M9 fill:#f96,stroke:#333
+    style M10 fill:#0a0,stroke:#333,color:#fff
+    style M11 fill:#e44,stroke:#333,color:#fff
+    style M12 fill:#0a0,stroke:#333,color:#fff
+```
+
+### MVP Definition of Done
+
+- [ ] age keypair generated, backed up to 1Password, `.sops.yaml` committed
+- [ ] `secrets.enc.yaml` committed with CI/deploy SSH key + DDNS password
+- [ ] All Pi setup scripts written with function-based structure
+- [ ] `make lint` passes (shellcheck on all scripts)
+- [ ] `make test-unit` passes (bats-core tests for all script functions)
+- [ ] `make deploy-pi ROLE=bastion TARGET=192.168.1.10` works
+- [ ] `make deploy-pi ROLE=dns TARGET=192.168.1.11` works
+- [ ] `make test-integration` passes (goss on both Pis)
+- [ ] `make test-acceptance` passes (DNS resolution, DDNS, SSH from outside)
+- [ ] DHCP DNS pointed to Pi 2, all clients resolving correctly
+- [ ] System stable for 24h with no manual intervention
