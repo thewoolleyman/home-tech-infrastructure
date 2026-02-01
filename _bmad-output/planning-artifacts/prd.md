@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [step-01-init, step-02-discovery, step-03-success, step-04-journeys, step-05-domain, step-06-innovation, step-07-project-type, step-08-scoping, step-09-functional, step-10-nonfunctional]
+stepsCompleted: [step-01-init, step-02-discovery, step-03-success, step-04-journeys, step-05-domain, step-06-innovation, step-07-project-type, step-08-scoping, step-09-functional, step-10-nonfunctional, step-11-polish]
 inputDocuments:
   - _bmad-output/planning-artifacts/product-brief-home-tech-infrastructure-2026-02-01.md
   - _bmad-output/brainstorming/architecture-diagram.md
@@ -65,28 +65,79 @@ This is a personal project -- no revenue, no user growth. "Business success" mea
 
 ## Product Scope
 
-### MVP - Minimum Viable Product
+### MVP Strategy & Philosophy
 
-- Pi 1: Bastion (SSH jump host, key-only auth, hardened sshd) + DDNS (cron, Namecheap API)
-- Pi 2: CoreDNS (split-horizon for mindlikewater.net, hosts plugin, generated hosts file)
-- Pi 3 + Pi 4: Hot-backup clones of Pi 1 and Pi 2
-- Infrastructure scaffolding: inventory.sh, secrets.enc.yaml, 3-phase deploy pipeline, Makefile
-- Full test pyramid: bats-core (unit), goss (integration), acceptance tests
-- SOPS + age secrets management for Pi tier
+**MVP Approach:** Problem-solving MVP -- the minimum automation that makes the Pi infrastructure reliable, recoverable, and code-managed. Every feature earns its place by supporting one of the four success criteria: rebuild from scratch, trust the tests, not afraid to change, repo is documentation.
 
-### Growth Features (Post-MVP)
+**Resource Requirements:** One operator (Chad) directing AI (Claude Code). No team. The AI writes all code, tests, and automation. Chad's only hands-on work is physical tasks (flash SD cards, plug in Pis) and directing the AI.
 
-- Automated hot-backup promotion (keepalived/VRRP or health-check-triggered DNS switch)
-- GitLab CI on LAN (self-hosted runner, push-triggered pipeline)
-- Router automation via Python TP-Link API
-- Monitoring dashboard (health check history, DNS query stats)
+**Why this MVP boundary:** The Pi layer is always-on infrastructure that the household depends on daily. The server layer (PowerEdge/K8s) is intermittent and optional. Solving the always-on layer first delivers immediate value and proves the AI-driven TDD pipeline before tackling more complex tiers.
 
-### Vision (Future)
+### MVP Feature Set (Phase 1)
 
-- Talos Linux on PowerEdge, single-node K8s, FluxCD GitOps
-- GitLab Omnibus + CI runners on K8s
-- Additional services deployed via FluxCD
-- Full network managed as code: modem, router, Pis, server, workloads
+**Core User Journeys Supported:**
+- Journey 1 (Build): Full TDD build of all 4 Pis from scratch
+- Journey 2 (Recovery): Hardware failure recovery in < 15 minutes
+- Journey 4 (Debug): Misconfiguration caught by test pyramid before reaching live network
+
+**Must-Have Capabilities:**
+
+| Capability | Justification | Without it, what breaks? |
+|---|---|---|
+| Pi 1: Bastion (hardened sshd, key-only auth) | Secure remote access to home network | No SSH access from outside the LAN |
+| Pi 1: DDNS updater (cron, Namecheap API) | Dynamic IP tracked for remote access | Remote access breaks on IP change |
+| Pi 2: CoreDNS (split-horizon, hosts plugin) | Internal DNS resolution for mindlikewater.net | LAN services unreachable by hostname |
+| Pi 3 + Pi 4: Hot-backup clones | Pre-production staging + instant fallback | No safe deploy target, no automatic DNS fallback |
+| inventory.sh | Single source of truth for all network config | Config scattered, AI can't discover conventions |
+| SOPS + age secrets | Credentials safe in git | Secrets in plaintext = security failure |
+| 3-phase deploy pipeline | Repeatable, testable deploys | Manual SSH sessions, no audit trail |
+| Makefile as UI | Discoverable operations via `make help` | Commands live in tribal knowledge |
+| bats-core unit tests | Fast local validation of script logic | AI-written code deployed without verification |
+| goss integration tests | On-Pi state verification | Config looks right but services don't work |
+| Acceptance tests | End-to-end network validation | Individual pieces work but system doesn't |
+| Health-check cron (log-based) | Post-deploy monitoring | Silent failures go unnoticed |
+
+**Deliberately excluded from MVP (can be manual initially):**
+
+| Excluded | Manual workaround | Why it's safe to defer |
+|---|---|---|
+| Automated failover (keepalived/VRRP) | Chad switches DNS pointer manually (< 30s) | Hot-backup Pi 4 already in DHCP as secondary DNS; household recovers automatically for DNS |
+| Push notifications on failure | Chad reads health-check log | Detection lag is acceptable for a home network |
+| GitLab CI | `make test-all` run locally by Claude Code | CI adds convenience, not safety -- the test pyramid runs the same either way |
+| Router automation | Chad uses router web UI | Router config changes are rare |
+| Monitoring dashboard | `make health-check` output + log file | Dashboard is visualization of data that already exists |
+
+### Post-MVP Features
+
+**Phase 2 -- Growth (Automation & CI):**
+
+| Feature | Depends on | Value added |
+|---|---|---|
+| Automated hot-backup promotion | MVP health checks | Removes Chad from the recovery loop for DNS failures |
+| GitLab CI on LAN | MVP test pyramid + K8s (or bare-metal runner) | Push-triggered pipeline, no manual `make test` |
+| Router automation (Python TP-Link API) | MVP inventory.sh patterns | DHCP/firewall managed as code, not via web UI |
+| Monitoring dashboard | MVP health-check data | Visualization + historical trends |
+
+**Phase 3 -- Vision (Full Stack as Code):**
+
+| Feature | Depends on | Value added |
+|---|---|---|
+| Talos Linux on PowerEdge | Phase 2 CI | Immutable OS, single-node K8s |
+| FluxCD GitOps | Talos + K8s | Cluster state reconciled from git |
+| GitLab Omnibus on K8s | FluxCD | Self-hosted git + CI runners |
+| Additional K8s workloads | FluxCD pipeline | Any service deployed via the same GitOps pattern |
+| Full network as code | All layers | Modem, router, Pis, server, workloads -- one repo |
+
+### Scoping Risk Mitigation
+
+| Risk | Category | Mitigation |
+|---|---|---|
+| SD card reliability (Pi failure) | Technical | Hot-backup Pis + fast recovery pipeline. MVP explicitly designs for this failure mode. |
+| CoreDNS misconfiguration breaks household internet | Technical | Deploy to hot-backup first. Pi 4 as secondary DNS in DHCP means household auto-recovers. |
+| AI writes incorrect automation | Technical | Test pyramid: bats-core catches logic errors, goss catches state errors, acceptance catches end-to-end failures. ShellCheck catches shell bugs. |
+| Scope creep into K8s/server tier | Resource | Hard MVP boundary: Pi layer only. Server is intermittent hardware. Post-MVP by design. |
+| Solo operator (Chad) unavailable | Resource | Repo is documentation. Standard bash scripts. Any engineer (or AI) can read the repo and operate the system. |
+| AI tool outage | Resource | All code is standard bash + standard tools. Zero AI runtime dependency. Chad can operate manually if needed. |
 
 ## User Journeys
 
@@ -178,12 +229,16 @@ The innovation validates itself through the MVP process:
 
 ### Risk Mitigation
 
-| Risk | Mitigation |
-|---|---|
-| AI writes subtly incorrect code | Test pyramid catches it -- unit tests for logic, goss for state, acceptance for end-to-end |
-| AI doesn't understand existing conventions | Consistent script patterns + inventory.sh contract + README make conventions explicit and discoverable |
-| AI tool unavailable (outage, API change) | All code is standard bash -- Chad can read, understand, and manually edit if needed. No AI dependency at runtime. |
-| AI introduces security vulnerability | ShellCheck (`make lint`), SSH hardening verification (goss), secrets never in plaintext (SOPS) |
+| Risk | Category | Mitigation |
+|---|---|---|
+| AI writes subtly incorrect code | Technical | Test pyramid catches it -- unit tests for logic, goss for state, acceptance for end-to-end. ShellCheck catches shell bugs. |
+| AI doesn't understand existing conventions | Technical | Consistent script patterns + inventory.sh contract + README make conventions explicit and discoverable |
+| AI introduces security vulnerability | Technical | ShellCheck (`make lint`), SSH hardening verification (goss), secrets never in plaintext (SOPS) |
+| AI tool unavailable (outage, API change) | Resource | All code is standard bash -- Chad can read, understand, and manually edit if needed. Zero AI runtime dependency. |
+| SD card reliability (Pi failure) | Technical | Hot-backup Pis + fast recovery pipeline. MVP explicitly designs for this failure mode. |
+| CoreDNS misconfiguration breaks household internet | Technical | Deploy to hot-backup first. Pi 4 as secondary DNS in DHCP means household auto-recovers. |
+| Scope creep into K8s/server tier | Resource | Hard MVP boundary: Pi layer only. Server is intermittent hardware. Post-MVP by design. |
+| Solo operator (Chad) unavailable | Resource | Repo is documentation. Standard bash scripts. Any engineer (or AI) can read the repo and operate the system. |
 
 ## Infrastructure-as-Code Specific Requirements
 
@@ -226,82 +281,6 @@ Every target must work non-interactively (no prompts, no confirmations) so Claud
 - **Idempotent everything.** Running any command twice produces no errors and no changes. Guards check state before acting.
 - **Fail fast, fail loud.** `set -euo pipefail` on every script. No silent failures. Errors surface immediately with context.
 - **No runtime dependencies beyond standard tools.** bash, ssh, scp, curl, goss, bats-core, shellcheck, sops, age. No Python for MVP (Python is only for post-MVP router management).
-
-## Project Scoping & Phased Development
-
-### MVP Strategy & Philosophy
-
-**MVP Approach:** Problem-solving MVP -- the minimum automation that makes the Pi infrastructure reliable, recoverable, and code-managed. Every feature earns its place by supporting one of the four success criteria: rebuild from scratch, trust the tests, not afraid to change, repo is documentation.
-
-**Resource Requirements:** One operator (Chad) directing AI (Claude Code). No team. The AI writes all code, tests, and automation. Chad's only hands-on work is physical tasks (flash SD cards, plug in Pis) and directing the AI.
-
-**Why this MVP boundary:** The Pi layer is always-on infrastructure that the household depends on daily. The server layer (PowerEdge/K8s) is intermittent and optional. Solving the always-on layer first delivers immediate value and proves the AI-driven TDD pipeline before tackling more complex tiers.
-
-### MVP Feature Set (Phase 1)
-
-**Core User Journeys Supported:**
-- Journey 1 (Build): Full TDD build of all 4 Pis from scratch
-- Journey 2 (Recovery): Hardware failure recovery in < 15 minutes
-- Journey 4 (Debug): Misconfiguration caught by test pyramid before reaching live network
-
-**Must-Have Capabilities:**
-
-| Capability | Justification | Without it, what breaks? |
-|---|---|---|
-| Pi 1: Bastion (hardened sshd, key-only auth) | Secure remote access to home network | No SSH access from outside the LAN |
-| Pi 1: DDNS updater (cron, Namecheap API) | Dynamic IP tracked for remote access | Remote access breaks on IP change |
-| Pi 2: CoreDNS (split-horizon, hosts plugin) | Internal DNS resolution for mindlikewater.net | LAN services unreachable by hostname |
-| Pi 3 + Pi 4: Hot-backup clones | Pre-production staging + instant fallback | No safe deploy target, no automatic DNS fallback |
-| inventory.sh | Single source of truth for all network config | Config scattered, AI can't discover conventions |
-| SOPS + age secrets | Credentials safe in git | Secrets in plaintext = security failure |
-| 3-phase deploy pipeline | Repeatable, testable deploys | Manual SSH sessions, no audit trail |
-| Makefile as UI | Discoverable operations via `make help` | Commands live in tribal knowledge |
-| bats-core unit tests | Fast local validation of script logic | AI-written code deployed without verification |
-| goss integration tests | On-Pi state verification | Config looks right but services don't work |
-| Acceptance tests | End-to-end network validation | Individual pieces work but system doesn't |
-| Health-check cron (log-based) | Post-deploy monitoring | Silent failures go unnoticed |
-
-**Deliberately excluded from MVP (can be manual initially):**
-
-| Excluded | Manual workaround | Why it's safe to defer |
-|---|---|---|
-| Automated failover (keepalived/VRRP) | Chad switches DNS pointer manually (< 30s) | Hot-backup Pi 4 already in DHCP as secondary DNS; household recovers automatically for DNS |
-| Push notifications on failure | Chad reads health-check log | Detection lag is acceptable for a home network |
-| GitLab CI | `make test-all` run locally by Claude Code | CI adds convenience, not safety -- the test pyramid runs the same either way |
-| Router automation | Chad uses router web UI | Router config changes are rare |
-| Monitoring dashboard | `make health-check` output + log file | Dashboard is visualization of data that already exists |
-
-### Post-MVP Features
-
-**Phase 2 -- Growth (Automation & CI):**
-
-| Feature | Depends on | Value added |
-|---|---|---|
-| Automated hot-backup promotion | MVP health checks | Removes Chad from the recovery loop for DNS failures |
-| GitLab CI on LAN | MVP test pyramid + K8s (or bare-metal runner) | Push-triggered pipeline, no manual `make test` |
-| Router automation (Python TP-Link API) | MVP inventory.sh patterns | DHCP/firewall managed as code, not via web UI |
-| Monitoring dashboard | MVP health-check data | Visualization + historical trends |
-
-**Phase 3 -- Vision (Full Stack as Code):**
-
-| Feature | Depends on | Value added |
-|---|---|---|
-| Talos Linux on PowerEdge | Phase 2 CI | Immutable OS, single-node K8s |
-| FluxCD GitOps | Talos + K8s | Cluster state reconciled from git |
-| GitLab Omnibus on K8s | FluxCD | Self-hosted git + CI runners |
-| Additional K8s workloads | FluxCD pipeline | Any service deployed via the same GitOps pattern |
-| Full network as code | All layers | Modem, router, Pis, server, workloads -- one repo |
-
-### Scoping Risk Mitigation
-
-| Risk | Category | Mitigation |
-|---|---|---|
-| SD card reliability (Pi failure) | Technical | Hot-backup Pis + fast recovery pipeline. MVP explicitly designs for this failure mode. |
-| CoreDNS misconfiguration breaks household internet | Technical | Deploy to hot-backup first. Pi 4 as secondary DNS in DHCP means household auto-recovers. |
-| AI writes incorrect automation | Technical | Test pyramid: bats-core catches logic errors, goss catches state errors, acceptance catches end-to-end failures. ShellCheck catches shell bugs. |
-| Scope creep into K8s/server tier | Resource | Hard MVP boundary: Pi layer only. Server is intermittent hardware. Post-MVP by design. |
-| Solo operator (Chad) unavailable | Resource | Repo is documentation. Standard bash scripts. Any engineer (or AI) can read the repo and operate the system. |
-| AI tool outage | Resource | All code is standard bash + standard tools. Zero AI runtime dependency. Chad can operate manually if needed. |
 
 ## Functional Requirements
 
