@@ -6,6 +6,8 @@
 # --- Network ---
 export DOMAIN="mindlikewater.net"
 export ROUTER_IP="192.168.1.1"
+export WIFI_SSID="FBI_SURVEILLANCE_VAN"
+export WIFI_IFACE="wlan0"
 
 # --- Pis ---
 export PI1_IP="192.168.1.10"

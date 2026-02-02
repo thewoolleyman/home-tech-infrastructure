@@ -4,11 +4,12 @@ How to flash a fresh microSD card with Raspberry Pi OS and boot a Pi for this pr
 
 ## Prerequisites
 
-- Raspberry Pi (any model with ethernet -- Pi 3B+, Pi 4, Pi 5)
+- Raspberry Pi Zero 2 W
 - microSD card (16GB+ recommended)
 - microSD card reader/adapter for your computer
-- Ethernet cable connected to your router
-- Power supply for the Pi
+- USB power supply (micro-USB)
+- WiFi network credentials
+- (Optional) mini-HDMI cable + USB OTG adapter + keyboard for debugging
 
 ## Pi Roles
 
@@ -20,6 +21,19 @@ How to flash a fresh microSD card with Raspberry Pi OS and boot a Pi for this pr
 | 4 | dns-backup | 192.168.1.13 | Hot backup DNS |
 
 Set up Pi 1 (bastion) first -- it is the jump host all other Pis connect through.
+
+## Network Setup
+
+The target network uses SSID `FBI_SURVEILLANCE_VAN` on a TP-Link Archer AXE95 router.
+
+During the transition from an old router, you may need the Pi on both networks:
+
+| Network | SSID | Purpose |
+|---------|------|---------|
+| Old (current) | `TP-Link_8500_5G` | Existing network while setting up |
+| New (target) | `FBI_SURVEILLANCE_VAN` | Final production network |
+
+Configure the **old** SSID first to get the Pi online, then switch to the new SSID when the Archer AXE95 is live.
 
 ## Step 1: Install Raspberry Pi Imager
 
@@ -35,7 +49,7 @@ Or download from: https://www.raspberrypi.com/software/
 
 1. Insert the **blank** microSD card into your Mac (via adapter if needed).
 2. Open **Raspberry Pi Imager** (`/Applications/Raspberry Pi Imager.app`).
-3. **Choose Device** -- select your Pi model (e.g. Raspberry Pi 4).
+3. **Choose Device** -- select **Raspberry Pi Zero 2 W**.
 4. **Choose OS** -> **Raspberry Pi OS (other)** -> **Raspberry Pi OS Lite (64-bit)**.
    - This is the headless server image (Debian Bookworm, no desktop).
 5. **Choose Storage** -- select your microSD card.
@@ -50,8 +64,13 @@ In the **General** tab:
 | Hostname | The Pi's hostname from the table above (e.g. `bastion`) |
 | Username | `deploy` |
 | Password | A temporary password (will be replaced by key-only SSH) |
-| Wireless LAN | Leave unchecked (Pis use ethernet) |
+| Configure wireless LAN | **Yes** -- see below |
+| SSID | `TP-Link_8500_5G` (old network) or `FBI_SURVEILLANCE_VAN` (new network) |
+| Password | Your WiFi password |
+| Wireless LAN country | `US` |
 | Locale | Your timezone (e.g. `America/Los_Angeles`) |
+
+> Use whichever SSID is currently active. You can switch later (see Step 6).
 
 In the **Services** tab:
 
@@ -70,28 +89,29 @@ In the **Services** tab:
 
 1. Remove any existing SD card from the Pi. Store old cards safely.
 2. Insert the freshly flashed microSD card.
-3. Connect an ethernet cable between the Pi and your router.
-4. Connect the power supply. The Pi will boot automatically.
-5. Wait ~60-90 seconds for the first boot to complete (the Pi resizes the filesystem and reboots once).
+3. Connect the power supply (micro-USB port labeled **PWR**). The Pi will boot automatically.
+4. Wait ~60-90 seconds for the first boot to complete (the Pi resizes the filesystem and reboots once).
+
+> No ethernet cable needed -- the Zero 2 W connects via WiFi configured in Step 2.
 
 ## Step 4: Find the Pi on Your Network
 
-The Pi will get an IP via DHCP. Find it using one of these methods:
+The Pi will get an IP via DHCP over WiFi. Find it using one of these methods:
 
-### Option A: Scan for Raspberry Pi MAC addresses
-
-```bash
-# Raspberry Pi Foundation MAC prefixes
-arp -a | grep -iE "b8:27:eb|dc:a6:32|e4:5f:01|d8:3a:dd|28:cd:c1|2c:cf:67"
-```
-
-### Option B: Try mDNS / Bonjour
+### Option A: Try mDNS / Bonjour
 
 ```bash
 ping bastion.local
 ```
 
 (Replace `bastion` with whatever hostname you set in Step 2.)
+
+### Option B: Scan for Raspberry Pi MAC addresses
+
+```bash
+# Raspberry Pi Foundation MAC prefixes
+arp -a | grep -iE "b8:27:eb|dc:a6:32|e4:5f:01|d8:3a:dd|28:cd:c1|2c:cf:67"
+```
 
 ### Option C: Check your router
 
@@ -121,36 +141,90 @@ hostname
 # Check OS
 cat /etc/os-release
 
-# Check network
-ip addr show eth0
+# Check WiFi connection
+ip addr show wlan0
+
+# Check which SSID you're connected to
+nmcli -t -f active,ssid dev wifi | grep '^yes'
 
 # Check disk space
 df -h /
 ```
 
-## Step 6: Set a Static IP (Before Running Deploy Scripts)
+## Step 6: Configure WiFi Networks
 
-Once you know the Pi boots and is reachable, assign it a static IP matching the inventory. Edit the Pi's DHCP client config:
+The Pi should already be connected to the SSID you configured in Step 2. To add the other network (so the Pi can switch between old and new routers):
+
+### Add the new network (if you started on the old one)
 
 ```bash
-sudo nmcli con mod "Wired connection 1" \
+sudo nmcli device wifi connect "FBI_SURVEILLANCE_VAN" password "NEW_WIFI_PASSWORD"
+```
+
+### Add the old network (if you started on the new one)
+
+```bash
+sudo nmcli device wifi connect "TP-Link_8500_5G" password "OLD_WIFI_PASSWORD"
+```
+
+### Set network priority (prefer the new network when both are available)
+
+```bash
+# Higher priority = preferred
+sudo nmcli connection modify "FBI_SURVEILLANCE_VAN" connection.autoconnect-priority 10
+sudo nmcli connection modify "TP-Link_8500_5G" connection.autoconnect-priority 5
+```
+
+### Switch between networks manually
+
+```bash
+# Switch to the new network
+sudo nmcli connection up "FBI_SURVEILLANCE_VAN"
+
+# Switch to the old network
+sudo nmcli connection up "TP-Link_8500_5G"
+
+# Check current connection
+nmcli -t -f active,ssid dev wifi | grep '^yes'
+```
+
+## Step 7: Set a Static IP
+
+Once the Pi is on the correct network, assign a static IP matching the inventory.
+
+### On the new network (FBI_SURVEILLANCE_VAN) -- target config
+
+```bash
+sudo nmcli con mod "FBI_SURVEILLANCE_VAN" \
   ipv4.addresses 192.168.1.10/24 \
   ipv4.gateway 192.168.1.1 \
   ipv4.dns "1.1.1.1 9.9.9.9" \
   ipv4.method manual
 
-sudo nmcli con up "Wired connection 1"
+sudo nmcli con up "FBI_SURVEILLANCE_VAN"
+```
+
+### On the old network (TP-Link_8500_5G) -- temporary during transition
+
+```bash
+sudo nmcli con mod "TP-Link_8500_5G" \
+  ipv4.addresses 192.168.1.10/24 \
+  ipv4.gateway 192.168.1.1 \
+  ipv4.dns "1.1.1.1 9.9.9.9" \
+  ipv4.method manual
+
+sudo nmcli con up "TP-Link_8500_5G"
 ```
 
 > Replace `192.168.1.10` with the correct IP for this Pi's role (see table above).
 
-After this, reconnect via the new static IP:
+After setting the static IP, reconnect via the new address:
 
 ```bash
 ssh deploy@192.168.1.10
 ```
 
-## Step 7: Deploy
+## Step 8: Deploy
 
 From your **Mac** (not the Pi), run the deploy scripts:
 
@@ -164,16 +238,32 @@ make deploy-pi ROLE=bastion TARGET=192.168.1.10
 
 Follow the same steps for each Pi, changing:
 - **Hostname** (Step 2) -- use the hostname from the table
-- **Static IP** (Step 6) -- use the IP from the table
-- **ROLE** (Step 7) -- use `bastion` or `dns` as appropriate
+- **Static IP** (Step 7) -- use the IP from the table
+- **ROLE** (Step 8) -- use `bastion` or `dns` as appropriate
+
+## Cutover: Switching from Old Router to New Router
+
+When the Archer AXE95 is ready to go live:
+
+1. Verify all Pis have both SSIDs configured (Step 6 above)
+2. Set priority so the new SSID is preferred (already done in Step 6)
+3. Power on the Archer AXE95 and configure it with the same subnet (192.168.1.0/24)
+4. Power off the old router
+5. Pis will automatically reconnect to `FBI_SURVEILLANCE_VAN`
+6. Verify each Pi: `ssh deploy@192.168.1.10` (and .11, .12, .13)
 
 ## Troubleshooting
 
 **Can't find the Pi on the network:**
-- Verify the ethernet cable is connected and the router port has link activity
+- Verify WiFi credentials were entered correctly in Step 2
 - Wait 90+ seconds -- first boot takes time
-- Try a different ethernet port on the router
+- Connect a mini-HDMI monitor + USB keyboard to check boot messages
 - Re-flash the SD card if the Pi never appears
+
+**WiFi won't connect:**
+- Check that the SSID and password are exact (case-sensitive)
+- Verify your router is broadcasting on a channel the Zero 2 W supports (2.4GHz and 5GHz)
+- Run `sudo nmcli device wifi list` on the Pi to see visible networks
 
 **SSH connection refused:**
 - Verify SSH was enabled in the Imager settings (Step 2)
@@ -181,6 +271,10 @@ Follow the same steps for each Pi, changing:
 
 **Wrong hostname:**
 - Re-flash the SD card -- it's faster than debugging
+
+**WiFi drops or reconnects slowly:**
+- NetworkManager handles reconnection automatically
+- For persistent issues, consider adding a watchdog cron job that restarts wlan0
 
 **NOOBS card from CanaKit:**
 - Store the original NOOBS card safely. You don't need it.
