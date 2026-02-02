@@ -47,11 +47,16 @@ const c = {
 function getUserInfo() {
   let name = 'user';
   let gitBranch = '';
-  let modelName = 'Opus 4.5';
+  let modelName = 'Model unknown (no usage yet)';
 
   try {
     name = execSync('git config user.name 2>/dev/null || echo "user"', { encoding: 'utf-8' }).trim();
     gitBranch = execSync('git branch --show-current 2>/dev/null || echo ""', { encoding: 'utf-8' }).trim();
+
+    // Note: Claude Code doesn't expose the current model through env vars or APIs
+    // The /model command updates internal state but doesn't write it anywhere
+    // accessible to external scripts. Model detection relies on ~/.claude.json
+    // which is only updated AFTER API usage happens, not before.
   } catch (e) {
     // Ignore errors
   }
