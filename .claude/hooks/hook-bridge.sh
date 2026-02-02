@@ -41,6 +41,10 @@ case "$MODE" in
   post-edit)
     FILE=$(jf '.tool_input.file_path')
     [ -z "$FILE" ] && exit 0
+    # Auto-sync BMAD artifacts to memory
+    case "$FILE" in
+      *_bmad-output/*) "$(dirname "$0")/../../scripts/sync-bmad-to-memory.sh" "$FILE" &>/dev/null & ;;
+    esac
     exec npx @claude-flow/cli@latest hooks post-edit --file="$FILE" --success=true
     ;;
 

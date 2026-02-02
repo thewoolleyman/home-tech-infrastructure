@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/hook-bridge.sh pre-edit",
+            "command": "bash .claude/hooks/hook-bridge.sh pre-edit",
             "timeout": 10000
           }
         ],
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/hook-bridge.sh pre-command",
+            "command": "bash .claude/hooks/hook-bridge.sh pre-command",
             "timeout": 10000
           }
         ],
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/hook-bridge.sh pre-task",
+            "command": "bash .claude/hooks/hook-bridge.sh pre-task",
             "timeout": 10000
           }
         ],
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/recall-memory.sh",
+            "command": "bash .claude/hooks/recall-memory.sh",
             "timeout": 10000
           }
         ],
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/log-hook-event.sh",
+            "command": "bash .claude/hooks/log-hook-event.sh",
             "timeout": 2000
           }
         ],
@@ -63,7 +63,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/hook-bridge.sh post-edit",
+            "command": "bash .claude/hooks/hook-bridge.sh post-edit",
             "timeout": 10000
           }
         ],
@@ -74,7 +74,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/hook-bridge.sh post-command",
+            "command": "bash .claude/hooks/hook-bridge.sh post-command",
             "timeout": 10000
           }
         ],
@@ -85,7 +85,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/hook-bridge.sh post-task",
+            "command": "bash .claude/hooks/hook-bridge.sh post-task",
             "timeout": 10000
           }
         ],
@@ -96,7 +96,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/build-context-bundle.sh --type tool",
+            "command": "bash .claude/hooks/build-context-bundle.sh --type tool",
             "timeout": 2000
           }
         ],
@@ -107,7 +107,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/log-hook-event.sh",
+            "command": "bash .claude/hooks/log-hook-event.sh",
             "timeout": 2000
           }
         ],
@@ -119,22 +119,22 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/recall-memory.sh",
+            "command": "bash .claude/hooks/recall-memory.sh",
             "timeout": 10000
           },
           {
             "type": "command",
-            "command": ".claude/hooks/build-context-bundle.sh --type prompt",
+            "command": "bash .claude/hooks/build-context-bundle.sh --type prompt",
             "timeout": 2000
           },
           {
             "type": "command",
-            "command": ".claude/hooks/hook-bridge.sh route",
+            "command": "bash .claude/hooks/hook-bridge.sh route",
             "timeout": 10000
           },
           {
             "type": "command",
-            "command": ".claude/hooks/log-hook-event.sh",
+            "command": "bash .claude/hooks/log-hook-event.sh",
             "timeout": 2000
           }
         ],
@@ -146,17 +146,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/log-hook-event.sh",
+            "command": "bash .claude/hooks/log-hook-event.sh",
             "timeout": 2000
           },
           {
             "type": "command",
-            "command": ".claude/hooks/hook-bridge.sh daemon-start",
+            "command": "bash .claude/hooks/hook-bridge.sh daemon-start",
             "timeout": 10000
           },
           {
             "type": "command",
-            "command": ".claude/hooks/hook-bridge.sh session-restore",
+            "command": "bash .claude/hooks/hook-bridge.sh session-restore",
             "timeout": 15000
           }
         ],
@@ -168,12 +168,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/hook-bridge.sh stop-check",
+            "command": "bash .claude/hooks/hook-bridge.sh stop-check",
             "timeout": 5000
           },
           {
             "type": "command",
-            "command": ".claude/hooks/log-hook-event.sh",
+            "command": "bash .claude/hooks/log-hook-event.sh",
             "timeout": 2000
           }
         ],
@@ -185,12 +185,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/hook-bridge.sh notify",
+            "command": "bash .claude/hooks/hook-bridge.sh notify",
             "timeout": 5000
           },
           {
             "type": "command",
-            "command": ".claude/hooks/log-hook-event.sh",
+            "command": "bash .claude/hooks/log-hook-event.sh",
             "timeout": 2000
           }
         ],
@@ -202,12 +202,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/log-hook-event.sh",
+            "command": "bash .claude/hooks/log-hook-event.sh",
             "timeout": 2000
           },
           {
             "type": "command",
-            "command": ".claude/hooks/hook-bridge.sh session-end",
+            "command": "bash .claude/hooks/hook-bridge.sh session-end",
             "timeout": 10000
           }
         ],

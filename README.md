@@ -26,3 +26,54 @@ This project manages the entire home network infrastructure as code -- from the 
 ## Status
 
 Planning phase. See `_bmad-output/brainstorming/architecture-diagram.md` for architecture decisions and diagrams.
+
+## Project Management with BMAD and Claude Flow
+
+This project uses two complementary systems:
+
+- **BMAD** -- Handles the *what* and *why*: product briefs, PRDs, architecture decisions, epics, stories, sprint tracking
+- **Claude Flow** -- Handles the *how*: agent orchestration, memory/pattern learning, swarm coordination for implementation
+
+### Automatic BMAD-to-Memory Sync
+
+When BMAD skills write artifacts to `_bmad-output/`, the post-edit hook automatically detects the write and syncs relevant patterns into Claude Flow's memory database. This makes the statusline metrics reflect actual project state.
+
+**How it works:**
+
+1. Any Write/Edit to a file under `_bmad-output/` triggers the `post-edit` hook
+2. The hook bridge (`.claude/hooks/hook-bridge.sh`) detects the `_bmad-output/` path
+3. It runs `scripts/sync-bmad-to-memory.sh` in the background with the file path
+4. The sync script extracts key data and stores it as patterns in Claude Flow memory
+
+**What gets extracted:**
+
+| Artifact | What's stored | Memory key format |
+|----------|--------------|-------------------|
+| Architecture decisions (33 total) | Decision + choice from the decision table | `bmad:arch:1` through `bmad:arch:33` |
+| Epics | Epic title + story count | `bmad:epic:1` through `bmad:epic:6` |
+| Stories | Story title | `bmad:story:1-1`, `bmad:story:1-2`, etc. |
+| Sprint status | Story counts by status | `bmad:sprint:status` |
+| Product brief | Executive summary (first 200 chars) | `bmad:brief:summary` |
+| PRD | FR/NFR counts and project type | `bmad:prd:summary` |
+| Brainstorming files | File title | `bmad:brainstorm:<filename>` |
+| Story files | Story title + status | `bmad:story-file:<filename>` |
+
+As patterns accumulate, the statusline metrics (DDD domains, intelligence %, AgentDB vectors) rise automatically.
+
+**Manual full sync** (re-syncs all artifacts at once):
+
+```bash
+scripts/sync-bmad-to-memory.sh
+```
+
+### BMAD Artifact Locations
+
+| Artifact | Location | BMAD Skill |
+|----------|----------|------------|
+| Product brief | `_bmad-output/planning-artifacts/product-brief-*.md` | `/bmad-bmm-create-product-brief` |
+| PRD | `_bmad-output/planning-artifacts/prd.md` | `/bmad-bmm-create-prd` |
+| Architecture | `_bmad-output/brainstorming/architecture-diagram.md` | `/bmad-bmm-create-architecture` |
+| Epics & stories | `_bmad-output/planning-artifacts/epics.md` | `/bmad-bmm-create-epics-and-stories` |
+| Sprint status | `_bmad-output/implementation-artifacts/sprint-status.yaml` | `/bmad-bmm-sprint-planning` |
+| Story files | `_bmad-output/implementation-artifacts/stories/` | `/bmad-bmm-create-story` |
+| Brainstorming | `_bmad-output/brainstorming/` | `/bmad-brainstorming` |
