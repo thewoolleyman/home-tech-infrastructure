@@ -62,6 +62,10 @@ This document provides the complete epic and story breakdown for home-tech-infra
 - NFR14: A fresh `git clone` + `make help` is sufficient to discover and understand all available operations
 - NFR15: Adding a new service follows the existing patterns with no new tooling required (same TDD cycle, same deploy pipeline, same test pyramid)
 
+- FR28: The operator can programmatically verify the Xfinity modem's bridge mode status and configuration
+- FR29: The operator can programmatically read and configure the router (SSID, DHCP, port forwarding, WiFi bands)
+- FR30: The operator can verify network health after a modem/router cutover with a single command
+
 ### Additional Requirements
 
 From Architecture:
@@ -87,20 +91,20 @@ From Architecture:
 | FR1 | Epic 3 | Bastion with hardened SSH |
 | FR2 | Epic 3 | DDNS updater |
 | FR3 | Epic 4 | Split-horizon DNS |
-| FR4 | Epic 6 | Hot-backup Pis |
+| FR4 | Epic 7 | Hot-backup Pis |
 | FR5 | Epic 4 | Add hostname via inventory.sh |
-| FR6 | Epic 5 | Deploy from fresh SD card |
-| FR7 | Epic 5 | Deploy by role and target IP |
-| FR8 | Epic 6 | Deploy to hot-backup first |
-| FR9 | Epic 6 | Rollback via DNS pointer |
-| FR10 | Epic 5 | Idempotent deploys |
-| FR11 | Epic 5 | First-boot checklist |
+| FR6 | Epic 6 | Deploy from fresh SD card |
+| FR7 | Epic 6 | Deploy by role and target IP |
+| FR8 | Epic 7 | Deploy to hot-backup first |
+| FR9 | Epic 7 | Rollback via DNS pointer |
+| FR10 | Epic 6 | Idempotent deploys |
+| FR11 | Epic 6 | First-boot checklist |
 | FR12 | Epic 3+4 | Unit tests (created with each script) |
-| FR13 | Epic 5 | Integration tests (goss on Pi) |
-| FR14 | Epic 5 | Acceptance tests (end-to-end) |
-| FR15 | Epic 5 | Single command for all tests |
-| FR16 | Epic 5 | Verify Pi health post-deploy |
-| FR17 | Epic 6 | Periodic health checks |
+| FR13 | Epic 6 | Integration tests (goss on Pi) |
+| FR14 | Epic 6 | Acceptance tests (end-to-end) |
+| FR15 | Epic 6 | Single command for all tests |
+| FR16 | Epic 6 | Verify Pi health post-deploy |
+| FR17 | Epic 7 | Periodic health checks |
 | FR18 | Epic 2 | Secrets encrypted in git |
 | FR19 | Epic 2 | Decrypt in deploy pipeline |
 | FR20 | Epic 2 | No plaintext in git history |
@@ -111,8 +115,16 @@ From Architecture:
 | FR25 | Epic 1 | Named Makefile targets |
 | FR26 | Epic 1 | Non-interactive commands |
 | FR27 | Epic 1 | Repo as documentation |
+| FR28 | Epic 0 | Modem bridge mode verification |
+| FR29 | Epic 0+5 | Router programmatic configuration |
+| FR30 | Epic 0 | Network cutover verification |
 
 ## Epic List
+
+### Epic 0: Network Device Discovery & Automation (NEW)
+Chad can programmatically verify and configure network devices (modem, router). Device automation scripts establish the foundation for infrastructure-as-code from the edge inward. Bridge mode is verified, router is configured, and cutover is validated -- all via scripts.
+**FRs covered:** FR28, FR29 (partial), FR30
+**Status:** Bridge mode enabled manually 2026-02-01. Automation scripts pending.
 
 ### Epic 1: Repository Foundation & Tooling
 Chad can clone the repo, run `make help`, and discover all operations. The TDD toolchain (bats-core, ShellCheck, goss) is installed and ready. inventory.sh defines the entire network.
@@ -130,13 +142,88 @@ Chad can provision Pi 1 as a hardened SSH bastion with DDNS. Scripts written TDD
 Chad can provision Pi 2 as a split-horizon DNS server for mindlikewater.net. Hosts file generated from inventory.sh. Scripts written TDD-first.
 **FRs covered:** FR3, FR5, FR22, FR12
 
-### Epic 5: Deploy Pipeline & Verification
+### Epic 5: Router Automation (NEW)
+Chad can manage the Archer AXE95 router programmatically from Pi 2. DHCP DNS pointer, port forwarding, and WiFi settings are all scriptable via the TP-Link Python API. This completes the automation layer that Epic 0 bootstrapped manually.
+**FRs covered:** FR29
+
+### Epic 6: Deploy Pipeline & Verification (was Epic 5)
 Chad can deploy any Pi from a fresh SD card with a single command and verify it works. The full test pyramid (unit, integration, acceptance) runs end-to-end.
 **FRs covered:** FR6, FR7, FR10, FR11, FR13, FR14, FR15, FR16
 
-### Epic 6: Hot Backups & Steady-State Operations
+### Epic 7: Hot Backups & Steady-State Operations (was Epic 6)
 Chad's network survives Pi hardware failure. Hot backups provide staging targets and automatic DNS fallback. Health checks detect failures.
 **FRs covered:** FR4, FR8, FR9, FR17
+
+---
+
+## Epic 0: Network Device Discovery & Automation
+
+Chad can programmatically verify and configure network devices (modem, router). Device automation scripts establish the foundation for infrastructure-as-code from the edge inward.
+
+### Story 0.1: Build Xfinity XB8 Modem Client
+
+As the operator,
+I want a script that authenticates with the XB8 modem admin and reads its status,
+So that I can programmatically verify bridge mode and modem health.
+
+**Acceptance Criteria:**
+
+**Given** the XB8 modem admin is accessible at 10.0.0.1 with "Admin Tool online access" enabled
+**When** I run `make modem-status`
+**Then** the script authenticates via HTTP POST to the login form
+**And** retrieves current bridge mode status from `at_a_glance.jst`
+**And** displays: bridge mode on/off, firmware version, connected devices
+
+**Given** the modem admin is unreachable (Admin Tool disabled or network issue)
+**When** the script runs
+**Then** it fails with a clear error and instructions to enable admin access via the Xfinity app
+
+**Given** unit tests exist with mocked HTTP responses
+**When** I run `make test-unit`
+**Then** login, status parsing, and error cases are all tested
+
+**FRs:** FR28
+
+### Story 0.2: Build Archer Router Client
+
+As the operator,
+I want a script that connects to the TP-Link router admin and reads its configuration,
+So that I can programmatically verify SSID, DHCP, port forwarding, and WAN status.
+
+**Acceptance Criteria:**
+
+**Given** the router is at 192.168.1.1
+**When** I run `make router-status`
+**Then** the script reads: WAN IP, connection type, SSID(s), DHCP range, port forwards
+**And** uses the tplinkrouterc2 Python library or direct HTTP API
+
+**Given** specific port forwards are expected (from inventory.sh)
+**When** I run `make router-forwards`
+**Then** the script lists current port forwards and flags any missing or misconfigured entries
+
+**Given** unit tests exist with mocked API responses
+**When** I run `make test-unit`
+**Then** status parsing and port forward verification are tested
+
+**FRs:** FR29 (partial)
+
+### Story 0.3: Create Network Cutover Verification Script
+
+As the operator,
+I want a single script that verifies the network is healthy after a modem/router change,
+So that I can confirm internet connectivity, DHCP, WiFi, and DNS after any cutover.
+
+**Acceptance Criteria:**
+
+**Given** the modem is in bridge mode and the router is online
+**When** I run `make verify-network`
+**Then** the script checks: internet connectivity (external DNS resolution), router reachable at 192.168.1.1, modem reachable at 10.0.0.1, WiFi SSID broadcasting, DHCP serving IPs
+
+**Given** any check fails
+**When** I inspect the output
+**Then** it reports which checks failed with descriptive messages and exits non-zero
+
+**FRs:** FR30
 
 ---
 
@@ -511,11 +598,62 @@ So that internal queries resolve to LAN IPs and external queries are forwarded u
 
 ---
 
-## Epic 5: Deploy Pipeline & Verification
+## Epic 5: Router Automation
+
+Chad can manage the Archer AXE95 router programmatically from Pi 2. DHCP DNS pointer, port forwarding, and WiFi settings are all scriptable via the TP-Link Python API.
+
+### Story 5.1: Create TP-Link API Wrapper with Tests
+
+As the operator,
+I want a Python wrapper around the TP-Link router API,
+So that I can programmatically read and configure the Archer AXE95 from Pi 2.
+
+**Acceptance Criteria:**
+
+**Given** the tplinkrouterc2 library (or equivalent) supports the AXE95
+**When** I import the wrapper module
+**Then** I can authenticate, read status, and configure settings programmatically
+**And** the wrapper is tested with mocked API responses
+
+**FRs:** FR29
+
+### Story 6.2: Automate DHCP DNS Pointer to Pi 2
+
+As the operator,
+I want a script that configures the router's DHCP to hand out Pi 2's IP as the DNS server,
+So that all LAN clients automatically use our CoreDNS instance.
+
+**Acceptance Criteria:**
+
+**Given** Pi 2 (dns, 192.168.1.11) is deployed and running CoreDNS
+**When** I run `make configure-dhcp-dns`
+**Then** the router's DHCP DNS setting is updated to 192.168.1.11
+**And** the change is idempotent (running twice produces no errors)
+
+**FRs:** FR29
+
+### Story 6.3: Automate Port Forwarding for SSH Bastion
+
+As the operator,
+I want a script that configures the SSH bastion port forward on the router,
+So that external SSH access is routed to Pi 1 without manual router UI steps.
+
+**Acceptance Criteria:**
+
+**Given** Pi 1 (bastion, 192.168.1.10) is deployed
+**When** I run `make configure-port-forwards`
+**Then** port forward ext:4222 -> 192.168.1.10:22 is created (or verified if it exists)
+**And** the change is idempotent
+
+**FRs:** FR29
+
+---
+
+## Epic 6: Deploy Pipeline & Verification (was Epic 5)
 
 Chad can deploy any Pi from a fresh SD card with a single command and verify it works. The full test pyramid (unit, integration, acceptance) runs end-to-end.
 
-### Story 5.1: Create Pi Image Preparation Script
+### Story 6.1: Create Pi Image Preparation Script
 
 As the operator,
 I want a `prep-pi-image.sh` script that walks me through first-boot configuration,
@@ -539,7 +677,7 @@ So that I can prepare a fresh SD card for a specific Pi role without memorizing 
 **FRs:** FR11
 **NFRs:** NFR12
 
-### Story 5.2: Create Deploy Pipeline Scripts (push.sh and run-setup.sh)
+### Story 6.2: Create Deploy Pipeline Scripts (push.sh and run-setup.sh)
 
 As the operator,
 I want `push.sh` (Phase 2) and `run-setup.sh` (Phase 3) scripts,
@@ -569,7 +707,7 @@ So that I can deploy scripts to a Pi and execute them remotely by role and targe
 **FRs:** FR7
 **NFRs:** NFR8, NFR9, NFR12
 
-### Story 5.3: Create deploy-pi Makefile Target with Idempotency
+### Story 6.3: Create deploy-pi Makefile Target with Idempotency
 
 As the operator,
 I want a single `make deploy-pi` command that orchestrates all 3 deploy phases,
@@ -594,7 +732,7 @@ So that I can deploy a complete Pi configuration from start to finish with one c
 **FRs:** FR6, FR10
 **NFRs:** NFR8, NFR10
 
-### Story 5.4: Create Goss Integration Test Specs
+### Story 6.4: Create Goss Integration Test Specs
 
 As the operator,
 I want goss specs for bastion and DNS roles,
@@ -621,7 +759,7 @@ So that I can verify a Pi's configuration is correct after deployment.
 **FRs:** FR13, FR16
 **NFRs:** NFR11 (partial)
 
-### Story 5.5: Create Acceptance Tests and Unified Test Targets
+### Story 6.5: Create Acceptance Tests and Unified Test Targets
 
 As the operator,
 I want acceptance test scripts and a single `make test-all` command,
@@ -652,11 +790,11 @@ So that I can validate end-to-end network behavior and run all quality checks wi
 
 ---
 
-## Epic 6: Hot Backups & Steady-State Operations
+## Epic 7: Hot Backups & Steady-State Operations (was Epic 6)
 
 Chad's network survives Pi hardware failure. Hot backups provide staging targets and automatic DNS fallback. Health checks detect failures.
 
-### Story 6.1: Create Hot-Backup Sync Scripts with Tests
+### Story 7.1: Create Hot-Backup Sync Scripts with Tests
 
 As the operator,
 I want sync scripts that keep Pi 3 and Pi 4 as identical clones of Pi 1 and Pi 2,
@@ -685,7 +823,7 @@ So that I have standby backups ready for instant promotion.
 **FRs:** FR4
 **NFRs:** NFR8, NFR12
 
-### Story 6.2: Create Deploy-to-Backup-First Workflow
+### Story 7.2: Create Deploy-to-Backup-First Workflow
 
 As the operator,
 I want to deploy changes to hot-backup Pis first,
@@ -708,7 +846,7 @@ So that I can verify changes on non-production targets before promoting to prima
 
 **FRs:** FR8
 
-### Story 6.3: Create DNS Rollback Script with Tests
+### Story 7.3: Create DNS Rollback Script with Tests
 
 As the operator,
 I want a rollback script that reverts the DHCP DNS pointer,
@@ -731,7 +869,7 @@ So that I can undo a DNS cut-over in under 30 seconds.
 
 **FRs:** FR9
 
-### Story 6.4: Create Health Check Script with Cron Scheduling
+### Story 7.4: Create Health Check Script with Cron Scheduling
 
 As the operator,
 I want a `health-check.sh` script that verifies Pi infrastructure is healthy,
