@@ -26,14 +26,17 @@ Set up Pi 1 (bastion) first -- it is the jump host all other Pis connect through
 
 The target network uses SSID `FBI_SURVEILLANCE_VAN` on a TP-Link Archer AXE95 router.
 
-During the transition from an old router, you may need the Pi on both networks:
+The Xfinity XB8 modem is in **bridge mode** (enabled 2026-02-01), passing the real public IP directly to the router. No double NAT.
 
-| Network | SSID | Purpose |
-|---------|------|---------|
-| Old (current) | `TP-Link_8500_5G` | Existing network while setting up |
-| New (target) | `FBI_SURVEILLANCE_VAN` | Final production network |
+During the transition you may need the Pi on multiple networks:
 
-Configure the **old** SSID first to get the Pi online, then switch to the new SSID when the Archer AXE95 is live.
+| Network | SSID | Status | Purpose |
+|---------|------|--------|---------|
+| Current production | `TP-Link_8500` / `TP-Link_8500_5G` | Active | Archer C2300 (temporary router) |
+| Target | `FBI_SURVEILLANCE_VAN` | Not yet deployed | Archer AXE95 (final router) |
+| Old (disabled) | `Big Bopper Bang` / `The Big Bopper` | Disabled | XB8 WiFi (off in bridge mode) |
+
+Configure the **current production** SSID (`TP-Link_8500_5G`) to get the Pi online, then switch to `FBI_SURVEILLANCE_VAN` when the Archer AXE95 is deployed.
 
 ## Step 1: Install Raspberry Pi Imager
 
@@ -65,12 +68,12 @@ In the **General** tab:
 | Username | `deploy` |
 | Password | A temporary password (will be replaced by key-only SSH) |
 | Configure wireless LAN | **Yes** -- see below |
-| SSID | `TP-Link_8500_5G` (old network) or `FBI_SURVEILLANCE_VAN` (new network) |
+| SSID | `TP-Link_8500_5G` (current production) or `FBI_SURVEILLANCE_VAN` (target, not yet active) |
 | Password | Your WiFi password |
 | Wireless LAN country | `US` |
 | Locale | Your timezone (e.g. `America/Los_Angeles`) |
 
-> Use whichever SSID is currently active. You can switch later (see Step 6).
+> Use `TP-Link_8500_5G` (current production on C2300). The old XB8 SSIDs are disabled. Switch to `FBI_SURVEILLANCE_VAN` when AXE95 is deployed (see Step 6).
 
 In the **Services** tab:
 

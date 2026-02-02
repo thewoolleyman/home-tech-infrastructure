@@ -9,8 +9,8 @@ graph TD
         NAMECHEAP["Namecheap DNS<br/>mindlikewater.net<br/>Only record: bastion A (DDNS)"]
     end
 
-    subgraph Edge["Edge - Modem (Zero Config After Bridge Toggle)"]
-        MODEM["Xfinity Modem/Gateway<br/>BRIDGE MODE<br/>Pass-through only<br/>No NAT, No DHCP, No WiFi"]
+    subgraph Edge["Edge - Modem (Bridge Mode Enabled 2026-02-01)"]
+        MODEM["Xfinity XB8 (Technicolor CGM4981COM)<br/>BRIDGE MODE (enabled)<br/>Admin: 10.0.0.1 (.jst pages, requires Xfinity app unlock)<br/>Pass-through only - No NAT, No DHCP, No WiFi"]
     end
 
     subgraph Network["Internal Network - 192.168.1.0/24"]
@@ -259,7 +259,7 @@ flowchart TD
 
 | # | Decision | Choice | Rationale |
 |---|----------|--------|-----------|
-| 1 | Xfinity modem mode | **Bridge** | Zero config after initial toggle. Router gets real public IP. No double NAT. |
+| 1 | Xfinity modem mode | **Bridge** | Enabled 2026-02-01. XB8 Technicolor CGM4981COM. Local admin at 10.0.0.1 (.jst pages) -- must first enable "Admin Tool online access" via Xfinity app. Router gets real public IP. No double NAT. |
 | 2 | Primary router | **Archer AXE95** | Handles NAT, DHCP, firewall, WiFi. Programmable via Python TP-Link API. |
 | 3 | Pi 1 role | **Bastion + DDNS** | DDNS is a cron job (zero attack surface). Both are edge concerns. |
 | 4 | Pi 2 role | **DNS + Router Mgmt** | CoreDNS for split-horizon. Router scripts for infra-as-code. |

@@ -8,8 +8,9 @@ This project manages the entire home network infrastructure as code -- from the 
 
 | Component | Device | Role |
 |-----------|--------|------|
-| Edge | Xfinity modem (bridge mode) | WAN pass-through |
-| Router | TP-Link Archer AXE95 | NAT, DHCP, firewall, WiFi -- managed via Python API |
+| Edge | Xfinity XB8 modem (bridge mode) | WAN pass-through (admin: 10.0.0.1) |
+| Router (current) | TP-Link Archer C2300 (SSID: TP-Link_8500) | Temporary -- NAT, DHCP, firewall, WiFi |
+| Router (target) | TP-Link Archer AXE95 (SSID: FBI_SURVEILLANCE_VAN) | NAT, DHCP, firewall, WiFi -- managed via Python API |
 | Bastion | Raspberry Pi 1 + hot backup | SSH jump host, DDNS updates |
 | DNS | Raspberry Pi 2 + hot backup | CoreDNS split-horizon for mindlikewater.net |
 | Server | Dell PowerEdge R630 (Talos/K8s) | GitLab, other workloads (intermittent -- not always on) |
