@@ -1,4 +1,5 @@
 # generated: 2026-02-01
+# updated: 2026-02-02
 # project: home-tech-infrastructure
 # project_key: NOKEY
 # tracking_system: file-system
@@ -40,6 +41,12 @@ tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 
 development_status:
+  # Epic 0: Network Device Discovery & Automation
+  epic-0: backlog
+  0-1-build-xfinity-xb8-modem-client: backlog
+  0-2-build-archer-router-client: backlog
+  0-3-create-network-cutover-verification-script: backlog
+
   # Epic 1: Repository Foundation & Tooling
   epic-1: done
   1-1-create-repository-scaffolding-and-makefile: done
@@ -69,19 +76,28 @@ development_status:
   4-2-create-coredns-setup-script-with-tests: done
   epic-4-retrospective: optional
 
-  # Epic 5: Deploy Pipeline & Verification
+  # Epic 5: Router Automation
   epic-5: backlog
-  5-1-create-pi-image-preparation-script: backlog
-  5-2-create-deploy-pipeline-scripts: backlog
-  5-3-create-deploy-pi-makefile-target-with-idempotency: backlog
-  5-4-create-goss-integration-test-specs: backlog
-  5-5-create-acceptance-tests-and-unified-test-targets: backlog
-  epic-5-retrospective: optional
+  5-1-create-tp-link-api-wrapper-with-tests: backlog
+  5-2-automate-dhcp-dns-pointer-to-pi2: backlog
+  5-3-automate-port-forwarding-for-ssh-bastion: backlog
 
-  # Epic 6: Hot Backups & Steady-State Operations
+  # Epic 6: Deploy Pipeline, Convergence & Verification
   epic-6: backlog
-  6-1-create-hot-backup-sync-scripts-with-tests: backlog
-  6-2-create-deploy-to-backup-first-workflow: backlog
-  6-3-create-dns-rollback-script-with-tests: backlog
-  6-4-create-health-check-script-with-cron-scheduling: backlog
+  6-1-create-pi-image-preparation-script: backlog
+  6-2-create-deploy-pipeline-scripts: backlog
+  6-3-create-deploy-pi-makefile-target-with-idempotency: backlog
+  6-4-create-goss-integration-test-specs: backlog
+  6-5-create-acceptance-tests-and-unified-test-targets: backlog
+  6-6-add-host-enumeration-and-role-mapping-to-inventory: backlog
+  6-7-create-fleet-convergence-orchestrator: backlog
   epic-6-retrospective: optional
+
+  # Epic 7: Hot Backups & Steady-State Operations
+  epic-7: backlog
+  7-1-create-hot-backup-sync-scripts-with-tests: backlog
+  7-2-create-deploy-to-backup-first-workflow: backlog
+  7-3-create-dns-rollback-script-with-tests: backlog
+  7-4-create-health-check-script-with-cron-scheduling: backlog
+  7-5-create-fleet-status-command: backlog
+  epic-7-retrospective: optional

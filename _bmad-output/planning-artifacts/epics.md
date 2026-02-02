@@ -43,6 +43,9 @@ This document provides the complete epic and story breakdown for home-tech-infra
 - FR25: The operator can perform every operation through named commands without memorizing raw tool invocations
 - FR26: Every command runs non-interactively with no prompts or confirmations required
 - FR27: The operator can understand and operate the entire network from a fresh clone of the repository without external documentation
+- FR31: The operator can converge all Pis to their declared state with a single command (`make converge`)
+- FR32: The operator can check the health status of all hosts with a single command (`make status`)
+- FR33: The operator can preview what convergence would change without applying changes (`make converge DRY_RUN=1`)
 
 ### NonFunctional Requirements
 
@@ -118,6 +121,9 @@ From Architecture:
 | FR28 | Epic 0 | Modem bridge mode verification |
 | FR29 | Epic 0+5 | Router programmatic configuration |
 | FR30 | Epic 0 | Network cutover verification |
+| FR31 | Epic 6 | Fleet convergence with single command |
+| FR32 | Epic 7 | Fleet status check |
+| FR33 | Epic 6 | Dry-run / drift detection |
 
 ## Epic List
 
@@ -146,13 +152,13 @@ Chad can provision Pi 2 as a split-horizon DNS server for mindlikewater.net. Hos
 Chad can manage the Archer AXE95 router programmatically from Pi 2. DHCP DNS pointer, port forwarding, and WiFi settings are all scriptable via the TP-Link Python API. This completes the automation layer that Epic 0 bootstrapped manually.
 **FRs covered:** FR29
 
-### Epic 6: Deploy Pipeline & Verification (was Epic 5)
-Chad can deploy any Pi from a fresh SD card with a single command and verify it works. The full test pyramid (unit, integration, acceptance) runs end-to-end.
-**FRs covered:** FR6, FR7, FR10, FR11, FR13, FR14, FR15, FR16
+### Epic 6: Deploy Pipeline, Convergence & Verification (was Epic 5)
+Chad can deploy any Pi from a fresh SD card with a single command, converge the entire fleet with `make converge`, and verify everything works. The convergence orchestrator iterates over inventory.sh hosts, pushes idempotent role scripts via SSH, executes them, and verifies with goss. The full test pyramid (unit, integration, acceptance) runs end-to-end.
+**FRs covered:** FR6, FR7, FR10, FR11, FR13, FR14, FR15, FR16, FR31, FR33
 
 ### Epic 7: Hot Backups & Steady-State Operations (was Epic 6)
-Chad's network survives Pi hardware failure. Hot backups provide staging targets and automatic DNS fallback. Health checks detect failures.
-**FRs covered:** FR4, FR8, FR9, FR17
+Chad's network survives Pi hardware failure. Hot backups provide staging targets and automatic DNS fallback. Health checks and fleet status detect failures. `make status` gives a quick overview of all hosts.
+**FRs covered:** FR4, FR8, FR9, FR17, FR32
 
 ---
 
@@ -649,9 +655,9 @@ So that external SSH access is routed to Pi 1 without manual router UI steps.
 
 ---
 
-## Epic 6: Deploy Pipeline & Verification (was Epic 5)
+## Epic 6: Deploy Pipeline, Convergence & Verification (was Epic 5)
 
-Chad can deploy any Pi from a fresh SD card with a single command and verify it works. The full test pyramid (unit, integration, acceptance) runs end-to-end.
+Chad can deploy any Pi from a fresh SD card with a single command, converge the entire fleet with `make converge`, and verify everything works.
 
 ### Story 6.1: Create Pi Image Preparation Script
 
@@ -788,6 +794,72 @@ So that I can validate end-to-end network behavior and run all quality checks wi
 **FRs:** FR14, FR15
 **NFRs:** NFR6
 
+### Story 6.6: Add Host Enumeration and Role Mapping to inventory.sh
+
+As the operator,
+I want inventory.sh to include a HOSTS array and role-to-scripts mapping,
+So that the convergence orchestrator can iterate over all hosts and know which scripts to run per role.
+
+**Acceptance Criteria:**
+
+**Given** inventory.sh is updated
+**When** I source it in a shell
+**Then** a `HOSTS` array exists with entries in `hostname:ip:role` format
+**And** a `CONVERGE_ORDER` array defines the convergence sequence
+**And** role-to-scripts mapping variables exist (`ROLE_COMMON`, `ROLE_BASTION`, `ROLE_DNS`)
+**And** helper functions exist: `pi_ip()`, `pi_role()`, `pis_with_role()`
+
+**Given** existing flat variables (`PI1_IP`, etc.) remain unchanged
+**When** existing scripts source inventory.sh
+**Then** they continue to work without modification (backward-compatible)
+
+**Given** bats-core tests are updated
+**When** I run `make test-unit`
+**Then** the HOSTS array, CONVERGE_ORDER, role mapping, and helper functions are all tested
+
+**FRs:** FR21, FR31
+**NFRs:** NFR12
+
+### Story 6.7: Create Fleet Convergence Orchestrator
+
+As the operator,
+I want a `converge.sh` script and `make converge` target,
+So that I can converge all Pis to their declared state with a single command.
+
+**Acceptance Criteria:**
+
+**Given** `converge.sh` exists at `scripts/deploy/`
+**When** I run `make converge`
+**Then** secrets are decrypted (Phase 1)
+**And** for each host in CONVERGE_ORDER: common scripts are pushed and run, then role-specific scripts are pushed and run
+**And** for backup hosts: sync scripts are run (Phase 3)
+**And** goss verification runs on all hosts (Phase 4)
+**And** a summary table shows per-host status (ok/changed/FAIL) with duration
+**And** secrets are shredded after completion
+
+**Given** I run `make converge ROLE=bastion`
+**When** convergence runs
+**Then** only hosts with role=bastion are converged
+
+**Given** I run `make converge DRY_RUN=1`
+**When** convergence runs
+**Then** it reports what WOULD change on each host without making changes
+
+**Given** a host is unreachable
+**When** convergence runs
+**Then** it marks the host as UNREACHABLE, continues to other hosts, and exits non-zero
+
+**Given** all hosts are already in desired state
+**When** I run `make converge` twice in a row
+**Then** the second run reports all hosts as "ok" with zero changes (idempotent)
+
+**Given** bats-core tests exist
+**When** I run `make test-unit`
+**Then** host iteration, role mapping, filtering (ROLE=, HOST=, SKIP=), and error handling are tested
+
+**FRs:** FR31, FR33
+**NFRs:** NFR8, NFR9, NFR10, NFR12
+
 ---
 
 ## Epic 7: Hot Backups & Steady-State Operations (was Epic 6)
@@ -902,3 +974,33 @@ So that failures are detected automatically and logged with timestamps.
 
 **FRs:** FR17
 **NFRs:** NFR11
+
+### Story 7.5: Create Fleet Status Command
+
+As the operator,
+I want a `make status` command that shows the health of all hosts at a glance,
+So that I can quickly check if everything is okay without running convergence.
+
+**Acceptance Criteria:**
+
+**Given** I run `make status`
+**When** the status script runs
+**Then** it checks reachability (ping, SSH port) for each host in inventory
+**And** it checks DNS resolution (internal and external)
+**And** it checks network device reachability (modem, router)
+**And** it displays a summary table: hostname, role, reachable (yes/no), services (ok/fail)
+
+**Given** all hosts are healthy
+**When** I inspect the output
+**Then** the last line reads "N hosts healthy. Network ok. DNS ok."
+
+**Given** a host is unreachable
+**When** I inspect the output
+**Then** the failing host shows "UNREACHABLE" and the exit code is non-zero
+
+**Given** bats-core tests exist
+**When** I run `make test-unit`
+**Then** the status script is tested with mocked ping and SSH commands
+
+**FRs:** FR32
+**NFRs:** NFR14

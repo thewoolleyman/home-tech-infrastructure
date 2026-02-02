@@ -27,7 +27,8 @@ classification:
 
 | Success criterion | Measurable outcome |
 |---|---|
-| **Rebuild from scratch** | `git clone` + `make deploy PI=<target>` on a fresh SD card produces a working Pi. Zero manual SSH steps. |
+| **Single-command convergence** | `make converge` brings all Pis to declared state. Running twice shows zero changes. |
+| **Rebuild from scratch** | `git clone` + `make deploy-pi ROLE=<role> TARGET=<ip>` on a fresh SD card produces a working Pi. Zero manual SSH steps. |
 | **Trust the tests** | `make test` catches a real misconfiguration before it hits the live network at least once during MVP development. |
 | **Not afraid to change** | Any modification deploys to a hot-backup first. Rollback to previous state takes < 30 seconds (revert DHCP DNS pointer). |
 | **Repo is documentation** | A fresh `git clone` + `make help` + README is sufficient to understand and operate the entire network. No tribal knowledge needed. |
@@ -50,7 +51,7 @@ This is a personal project -- no revenue, no user growth. "Business success" mea
 | **Test pyramid coverage** | 100% of MVP scripts have corresponding bats-core unit tests |
 | **All tests green** | `make test-all` (lint + unit + integration + acceptance) passes |
 | **Secrets never in plaintext** | No plaintext credentials in git history. SOPS + age is the only path. |
-| **Idempotent deploys** | Running `make deploy` twice in a row produces no errors and no changes |
+| **Idempotent convergence** | Running `make converge` twice in a row produces no errors and no changes |
 | **Scripts pass ShellCheck** | `make lint` clean with zero warnings |
 
 ### Measurable Outcomes
@@ -248,6 +249,8 @@ All developer-facing operations are Makefile targets. No raw commands to memoriz
 
 | Category | Targets | Requires Pi? |
 |---|---|---|
+| Convergence | `make converge`, `make converge-host HOST=<name>` | Yes |
+| Status | `make status`, `make verify`, `make converge DRY_RUN=1` | Yes (status: partial) |
 | Quality | `make lint`, `make test`, `make test-unit` | No |
 | Integration | `make test-integration`, `make verify-pi` | Yes |
 | Acceptance | `make test-acceptance` | Yes |
@@ -321,6 +324,12 @@ Every target must work non-interactively (no prompts, no confirmations) so Claud
 - FR21: The operator can define all network configuration (IPs, hostnames, roles, domain, ports) in a single source-of-truth file
 - FR22: The system generates downstream configuration files (DNS hosts, etc.) from the single source of truth
 - FR23: The operator can lint all scripts and catch shell errors before deployment
+
+### Fleet Convergence
+
+- FR31: The operator can converge all Pis to their declared state with a single command (`make converge`)
+- FR32: The operator can check the health status of all hosts with a single command (`make status`)
+- FR33: The operator can preview what convergence would change without applying changes (`make converge DRY_RUN=1`)
 
 ### Discoverability & Operations
 
