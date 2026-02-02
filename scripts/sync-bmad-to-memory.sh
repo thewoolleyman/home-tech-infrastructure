@@ -28,6 +28,7 @@ sync_architecture_decisions() {
 
   # Extract rows from the 33-decision table: "| N | Decision | Choice | Rationale |"
   local n=0
+  # shellcheck disable=SC2034
   while IFS='|' read -r _ num decision choice rationale _; do
     num=$(echo "$num" | tr -d ' ')
     # Skip non-numeric rows (header, separator)
@@ -48,12 +49,14 @@ sync_epics() {
   local story_count=0
 
   # Extract epic headers: "## Epic N: Title" or "### Epic N: Title"
+  # shellcheck disable=SC2094
   while IFS= read -r line; do
     if [[ "$line" =~ ^##\ Epic\ ([0-9]+):\ (.+) ]]; then
       local epic_num="${BASH_REMATCH[1]}"
       local epic_title="${BASH_REMATCH[2]}"
       # Count stories under this epic
       local stories
+      # shellcheck disable=SC2094
       stories=$(grep -cE "^### Story ${epic_num}\." "$file" 2>/dev/null || echo "0")
       store_pattern "bmad:epic:$epic_num" "Epic $epic_num: $epic_title ($stories stories)"
       epic_count=$((epic_count + 1))
@@ -82,8 +85,8 @@ sync_sprint_status() {
   local backlog=0 ready=0 in_progress=0 review=0 done=0
 
   while IFS=': ' read -r key value; do
-    key=$(echo "$key" | sed 's/^ *//')
-    value=$(echo "$value" | sed 's/^ *//')
+    key="${key#"${key%%[! ]*}"}"
+    value="${value#"${value%%[! ]*}"}"
     # Skip comment lines, empty lines, and metadata keys
     [[ "$key" =~ ^# ]] && continue
     [[ -z "$key" ]] && continue

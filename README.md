@@ -23,9 +23,33 @@ This project manages the entire home network infrastructure as code -- from the 
 - **Ansible-compatible scripts**: Shell scripts structured for future Ansible migration
 - **GitOps for K8s**: FluxCD reconciles cluster state from this repo
 
+## Prerequisites
+
+- **git** (with submodule support)
+- **bash** 4+
+- **ShellCheck** -- `brew install shellcheck` (macOS) or `apt install shellcheck` (Debian/Ubuntu)
+- **make**
+
+## Quick Start
+
+```bash
+# Clone with submodules (bats test framework)
+git clone --recurse-submodules <repo-url>
+cd home-tech-infrastructure
+
+# If already cloned without submodules:
+git submodule update --init --recursive
+
+# See all available targets
+make help
+
+# Run lint + unit tests (no Pi hardware needed)
+make test
+```
+
 ## Status
 
-Planning phase. See `_bmad-output/brainstorming/architecture-diagram.md` for architecture decisions and diagrams.
+Epic 1 (Repository Foundation & Tooling) in progress. See `_bmad-output/implementation-artifacts/sprint-status.yaml` for current sprint status.
 
 ## Project Management with BMAD and Claude Flow
 

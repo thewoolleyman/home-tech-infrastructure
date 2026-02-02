@@ -41,32 +41,32 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: Repository Foundation & Tooling
-  epic-1: backlog
-  1-1-create-repository-scaffolding-and-makefile: backlog
-  1-2-create-inventory-sh-as-single-source-of-truth: backlog
-  1-3-set-up-tdd-toolchain: backlog
-  1-4-create-readme-with-setup-and-operations-guide: backlog
+  epic-1: done
+  1-1-create-repository-scaffolding-and-makefile: done
+  1-2-create-inventory-sh-as-single-source-of-truth: done
+  1-3-set-up-tdd-toolchain: done
+  1-4-create-readme-with-setup-and-operations-guide: done
   epic-1-retrospective: optional
 
   # Epic 2: Secrets Bootstrap
-  epic-2: backlog
-  2-1-generate-age-keypair-and-configure-sops-yaml: backlog
-  2-2-create-and-encrypt-secrets-file: backlog
-  2-3-create-decrypt-script-for-deploy-pipeline: backlog
+  epic-2: done
+  2-1-generate-age-keypair-and-configure-sops-yaml: done
+  2-2-create-and-encrypt-secrets-file: done
+  2-3-create-decrypt-script-for-deploy-pipeline: done
   epic-2-retrospective: optional
 
   # Epic 3: Bastion & Remote Access
-  epic-3: backlog
-  3-1-create-common-ssh-and-firewall-hardening-script-with-tests: backlog
-  3-2-create-unattended-upgrades-script-with-tests: backlog
-  3-3-create-bastion-setup-script-with-tests: backlog
-  3-4-create-ddns-update-script-with-tests: backlog
+  epic-3: done
+  3-1-create-common-ssh-and-firewall-hardening-script-with-tests: done
+  3-2-create-unattended-upgrades-script-with-tests: done
+  3-3-create-bastion-setup-script-with-tests: done
+  3-4-create-ddns-update-script-with-tests: done
   epic-3-retrospective: optional
 
   # Epic 4: DNS & Name Resolution
-  epic-4: backlog
-  4-1-create-dns-hosts-file-generator-with-tests: backlog
-  4-2-create-coredns-setup-script-with-tests: backlog
+  epic-4: done
+  4-1-create-dns-hosts-file-generator-with-tests: done
+  4-2-create-coredns-setup-script-with-tests: done
   epic-4-retrospective: optional
 
   # Epic 5: Deploy Pipeline & Verification

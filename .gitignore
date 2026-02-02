@@ -38,3 +38,8 @@ Temporary Items
 .swarm/state.json
 .swarm/schema.sql
 # END claude-flow-memory-hooks
+
+# Never commit unencrypted secrets or private keys
+*.dec.yaml
+age.key
+*.agekey
