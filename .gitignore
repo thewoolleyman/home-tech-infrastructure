@@ -37,6 +37,7 @@ Temporary Items
 .claude-flow/learning/context_bundles/
 .swarm/
 # END claude-flow-memory-hooks
+vectors.db
 
 # Never commit unencrypted secrets or private keys
 *.dec.yaml
