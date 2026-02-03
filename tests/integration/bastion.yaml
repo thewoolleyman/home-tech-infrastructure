@@ -1,0 +1,25 @@
+# tests/integration/bastion.yaml
+# Goss spec for bastion role.
+# Includes common checks, plus SSH, DDNS cron, firewall, authorized_keys.
+
+gossfile:
+  common.yaml: {}
+
+port:
+  tcp:22:
+    listening: true
+
+command:
+  ddns-cron-exists:
+    exec: "crontab -l -u deploy 2>/dev/null | grep update-namecheap"
+    exit-status: 0
+
+  firewall-deny-default:
+    exec: "iptables -L INPUT -n | head -1"
+    exit-status: 0
+    stdout:
+      - "DROP"
+
+file:
+  /home/deploy/.ssh/authorized_keys:
+    exists: true

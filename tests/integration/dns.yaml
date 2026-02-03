@@ -1,0 +1,38 @@
+# tests/integration/dns.yaml
+# Goss spec for DNS role.
+# Includes common checks, plus CoreDNS process, ports, config, service.
+
+gossfile:
+  common.yaml: {}
+
+process:
+  coredns:
+    running: true
+
+port:
+  tcp:53:
+    listening: true
+  udp:53:
+    listening: true
+
+file:
+  /etc/coredns/Corefile:
+    exists: true
+    contains:
+      - "mindlikewater.net"
+      - "hosts"
+
+  /etc/coredns/hosts:
+    exists: true
+
+service:
+  coredns:
+    enabled: true
+    running: true
+
+command:
+  dns-resolves-internal:
+    exec: "dig @127.0.0.1 bastion.mindlikewater.net +short"
+    exit-status: 0
+    stdout:
+      - "192.168.1.10"

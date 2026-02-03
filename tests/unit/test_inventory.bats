@@ -125,3 +125,100 @@ setup() {
     [[ "$DNS_UPSTREAM_1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
     [[ "$DNS_UPSTREAM_2" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
 }
+
+# ---- Host enumeration (Story 6.6) ----
+
+@test "HOSTS array is defined with 4 entries" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    [ "${#HOSTS[@]}" -eq 4 ]
+}
+
+@test "HOSTS entries use hostname:ip:role format" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    for entry in "${HOSTS[@]}"; do
+        [[ "$entry" =~ ^[a-z-]+:[0-9.]+:[a-z]+$ ]]
+    done
+}
+
+@test "CONVERGE_ORDER is defined with 4 entries" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    [ "${#CONVERGE_ORDER[@]}" -eq 4 ]
+}
+
+@test "CONVERGE_ORDER first entry is bastion (primary first)" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    [ "${CONVERGE_ORDER[0]}" = "bastion" ]
+}
+
+@test "ROLE_COMMON contains harden.sh" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    [[ "$ROLE_COMMON" == *"harden.sh"* ]]
+}
+
+@test "ROLE_BASTION contains setup-bastion.sh" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    [[ "$ROLE_BASTION" == *"setup-bastion.sh"* ]]
+}
+
+@test "ROLE_DNS contains setup-coredns.sh" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    [[ "$ROLE_DNS" == *"setup-coredns.sh"* ]]
+}
+
+@test "pi_ip returns correct IP for bastion" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    result="$(pi_ip "bastion")"
+    [ "$result" = "192.168.1.10" ]
+}
+
+@test "pi_ip returns correct IP for dns" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    result="$(pi_ip "dns")"
+    [ "$result" = "192.168.1.11" ]
+}
+
+@test "pi_ip returns correct IP for bastion-backup" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    result="$(pi_ip "bastion-backup")"
+    [ "$result" = "192.168.1.12" ]
+}
+
+@test "pi_ip fails for unknown hostname" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    run pi_ip "nonexistent"
+    [ "$status" -ne 0 ]
+}
+
+@test "pi_role returns bastion for bastion host" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    result="$(pi_role "bastion")"
+    [ "$result" = "bastion" ]
+}
+
+@test "pi_role returns dns for dns host" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    result="$(pi_role "dns")"
+    [ "$result" = "dns" ]
+}
+
+@test "pis_with_role bastion returns bastion and bastion-backup" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    result="$(pis_with_role "bastion")"
+    [[ "$result" == *"bastion"* ]]
+    [[ "$result" == *"bastion-backup"* ]]
+}
+
+@test "pis_with_role dns returns dns and dns-backup" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    result="$(pis_with_role "dns")"
+    [[ "$result" == *"dns"* ]]
+    [[ "$result" == *"dns-backup"* ]]
+}
+
+@test "existing flat variables still work after enumeration additions" {
+    source "$PROJECT_ROOT/infrastructure/pi-scripts/inventory.sh"
+    [ "$PI1_IP" = "192.168.1.10" ]
+    [ "$PI2_IP" = "192.168.1.11" ]
+    [ "$DOMAIN" = "mindlikewater.net" ]
+    [ "$DEPLOY_USER" = "deploy" ]
+}

@@ -1,0 +1,28 @@
+# tests/integration/common.yaml
+# Goss spec for common checks applied to ALL Pis.
+# Verifies: deploy user, SSH hardening, unattended-upgrades.
+
+user:
+  deploy:
+    exists: true
+    groups:
+      - sudo
+    shell: /bin/bash
+
+package:
+  unattended-upgrades:
+    installed: true
+
+file:
+  /etc/ssh/sshd_config:
+    exists: true
+    contains:
+      - "PasswordAuthentication no"
+      - "PermitRootLogin no"
+
+command:
+  ssh-password-auth-disabled:
+    exec: "sshd -T 2>/dev/null | grep -i passwordauthentication"
+    exit-status: 0
+    stdout:
+      - "passwordauthentication no"

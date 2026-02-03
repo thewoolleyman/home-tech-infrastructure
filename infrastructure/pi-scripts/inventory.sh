@@ -48,3 +48,61 @@ export DEPLOY_USER="deploy"
 
 # --- SSH external port ---
 export SSH_EXTERNAL_PORT="4222"
+
+# --- Host enumeration (structured) ---
+HOSTS=(
+    "bastion:192.168.1.10:bastion"
+    "dns:192.168.1.11:dns"
+    "bastion-backup:192.168.1.12:bastion"
+    "dns-backup:192.168.1.13:dns"
+)
+
+# --- Convergence order (primaries first, then backups) ---
+export CONVERGE_ORDER=("bastion" "dns" "bastion-backup" "dns-backup")
+
+# --- Role-to-scripts mapping ---
+export ROLE_COMMON="common/harden.sh common/unattended-upgrades.sh"
+export ROLE_BASTION="bastion/setup-bastion.sh bastion/setup-ddns.sh"
+export ROLE_DNS="dns/setup-coredns.sh"
+
+# --- Helper functions ---
+
+# Get IP for a hostname. Usage: pi_ip "bastion"
+pi_ip() {
+    local target_host="$1"
+    local hostname ip role
+    for entry in "${HOSTS[@]}"; do
+        IFS=: read -r hostname ip role <<< "$entry"
+        if [ "$hostname" = "$target_host" ]; then
+            echo "$ip"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Get role for a hostname. Usage: pi_role "bastion"
+pi_role() {
+    local target_host="$1"
+    local hostname ip role
+    for entry in "${HOSTS[@]}"; do
+        IFS=: read -r hostname ip role <<< "$entry"
+        if [ "$hostname" = "$target_host" ]; then
+            echo "$role"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# List hostnames with a given role. Usage: pis_with_role "bastion"
+pis_with_role() {
+    local target_role="$1"
+    local hostname ip role
+    for entry in "${HOSTS[@]}"; do
+        IFS=: read -r hostname ip role <<< "$entry"
+        if [ "$role" = "$target_role" ]; then
+            echo "$hostname"
+        fi
+    done
+}
