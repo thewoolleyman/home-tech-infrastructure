@@ -1,5 +1,5 @@
 # generated: 2026-02-01
-# updated: 2026-02-03
+# updated: 2026-02-02
 # project: home-tech-infrastructure
 # project_key: NOKEY
 # tracking_system: file-system
@@ -101,3 +101,14 @@ development_status:
   7-4-create-health-check-script-with-cron-scheduling: done
   7-5-create-fleet-status-command: done
   epic-7-retrospective: optional
+
+  # Epic 8: Physical Infrastructure Deployment & Commissioning
+  epic-8: in-progress
+  8-1-prepare-physical-hardware-and-network-topology: ready-for-dev
+  8-2-bootstrap-first-pi-bastion-with-manual-configuration: backlog
+  8-3-execute-initial-deployment-bastion-and-dns: backlog
+  8-4-configure-router-automation-and-network-cutover: backlog
+  8-5-deploy-hot-backups-and-enable-sync: backlog
+  8-6-run-full-acceptance-test-suite: backlog
+  8-7-enable-production-monitoring-and-document-operational-procedures: backlog
+  epic-8-retrospective: optional

@@ -1004,3 +1004,273 @@ So that I can quickly check if everything is okay without running convergence.
 
 **FRs:** FR32
 **NFRs:** NFR14
+
+---
+
+## Epic 8: Physical Infrastructure Deployment & Commissioning
+
+Chad has successfully deployed the physical infrastructure from scripts to live hardware. The network is operational with all services running in production.
+
+**Context:** Epics 0-7 delivered a complete automation system (scripts, tests, deployment pipeline). Epic 8 executes that system against real hardware to achieve a fully operational network.
+
+### Story 8.1: Prepare Physical Hardware and Network Topology
+
+As the operator,
+I want to physically connect and power on all network devices,
+So that the hardware foundation is ready for software provisioning.
+
+**Acceptance Criteria:**
+
+**Given** the Xfinity XB8 modem and Archer AXE95 router are unpacked
+**When** I connect modem WAN → ISP coax, modem LAN → router WAN
+**Then** modem is in bridge mode (verify with `make modem-status`)
+**And** router gets public IP on WAN interface
+**And** router LAN is serving DHCP (192.168.1.x range)
+
+**Given** four Raspberry Pis have fresh SD cards
+**When** I flash RPi OS Lite 64-bit to each SD card
+**Then** each SD card boots to login prompt
+**And** SSH is enabled on boot partition
+
+**Given** all Pis are powered and connected to router LAN
+**When** I check router DHCP leases
+**Then** all four Pis appear with assigned IPs
+
+**Physical Verification:**
+- Modem power LED: solid (not blinking)
+- Router power LED: solid
+- Router WAN LED: connected
+- All four Pis: power LED on, activity LED flickering
+- Laptop can reach router admin at 192.168.1.1
+
+**FRs:** FR28, FR30
+
+---
+
+### Story 8.2: Bootstrap First Pi (Bastion) with Manual Configuration
+
+As the operator,
+I want to manually configure Pi 1 as the deployment bootstrap host,
+So that I have a working bastion to deploy remaining infrastructure from.
+
+**Acceptance Criteria:**
+
+**Given** Pi 1 has fresh RPi OS booted
+**When** I run through first-boot setup manually:
+- Set hostname: `bastion`
+- Configure static IP: `192.168.1.10`
+- Create deploy user: `chadops`
+- Enable SSH key authentication
+- Copy deployment repo to Pi 1
+**Then** I can SSH to `chadops@192.168.1.10` from my laptop
+
+**Given** Pi 1 has repo cloned at `/home/chadops/home-tech-infrastructure`
+**When** I run `make test-unit` on Pi 1
+**Then** all unit tests pass locally on the Pi
+
+**Given** age private key is available on Pi 1
+**When** I run `make decrypt-secrets` on Pi 1
+**Then** secrets decrypt successfully
+
+**Physical Verification:**
+- Can SSH to Pi 1 from laptop: `ssh chadops@192.168.1.10`
+- Pi 1 can reach internet: `ping 1.1.1.1`
+- Pi 1 has repo with passing tests
+
+**FRs:** FR1 (partial), FR6 (partial)
+**NFRs:** NFR3, NFR10
+
+---
+
+### Story 8.3: Execute Initial Deployment - Bastion and DNS
+
+As the operator,
+I want to run the deployment pipeline to provision Pi 1 (bastion) and Pi 2 (DNS),
+So that core network services are operational.
+
+**Acceptance Criteria:**
+
+**Given** Pi 1 is bootstrapped and repo is ready
+**When** I run `make deploy-pi ROLE=bastion TARGET=192.168.1.10`
+**Then** bastion deployment completes successfully:
+- Common hardening applied (SSH, firewall, unattended-upgrades)
+- DDNS cron job installed
+- Goss integration tests pass
+
+**Given** Pi 2 has fresh SD card with static IP `192.168.1.11`
+**When** I run `make deploy-pi ROLE=dns TARGET=192.168.1.11`
+**Then** DNS deployment completes successfully:
+- CoreDNS installed and running
+- Hosts file generated from inventory.sh
+- DNS resolves mindlikewater.net names to LAN IPs
+- Goss integration tests pass
+
+**Given** both deployments succeeded
+**When** I run `make verify-pi TARGET=192.168.1.10` and `make verify-pi TARGET=192.168.1.11`
+**Then** both verification suites report PASS
+
+**Physical Verification:**
+- From laptop: `dig bastion.mindlikewater.net @192.168.1.11` returns `192.168.1.10`
+- From laptop: `dig dns.mindlikewater.net @192.168.1.11` returns `192.168.1.11`
+- From laptop: `ssh -p 22 chadops@192.168.1.10` succeeds
+- Pi 2 process check: `systemctl status coredns` shows active (running)
+
+**FRs:** FR1, FR2, FR3, FR6, FR7, FR10, FR13, FR16
+**NFRs:** NFR3, NFR4, NFR7, NFR8, NFR10
+
+---
+
+### Story 8.4: Configure Router Automation and Network Cut-Over
+
+As the operator,
+I want to configure the router to use Pi 2 as DNS and enable external SSH access,
+So that the network uses our managed services instead of defaults.
+
+**Acceptance Criteria:**
+
+**Given** Pi 2 DNS is verified working
+**When** I run `make configure-dhcp-dns`
+**Then** router DHCP hands out `192.168.1.11` as primary DNS
+**And** DHCP clients (including my laptop) receive the new DNS setting on next lease renewal
+
+**Given** Pi 1 bastion is verified working
+**When** I run `make configure-port-forwards`
+**Then** router port forward is configured: external 4222 → 192.168.1.10:22
+
+**Given** DDNS is updating bastion.mindlikewater.net
+**When** I wait for next DDNS cron run (5 minutes max)
+**Then** `dig bastion.mindlikewater.net` from internet returns my public IP
+**And** Namecheap DNS record matches current public IP
+
+**Physical Verification:**
+- Laptop renews DHCP lease, receives DNS server `192.168.1.11`
+- From laptop: `nslookup google.com` uses Pi 2 DNS (check `/etc/resolv.conf`)
+- From laptop: `nslookup bastion.mindlikewater.net` resolves to LAN IP
+- From external network (phone hotspot): `ssh -p 4222 chadops@bastion.mindlikewater.net` succeeds
+
+**FRs:** FR2, FR3, FR5, FR29
+**NFRs:** NFR7
+
+---
+
+### Story 8.5: Deploy Hot Backups and Enable Sync
+
+As the operator,
+I want to deploy Pi 3 and Pi 4 as hot backups with automated sync,
+So that I have redundancy and staging targets for changes.
+
+**Acceptance Criteria:**
+
+**Given** Pi 3 and Pi 4 have fresh SD cards with static IPs (`.12`, `.13`)
+**When** I run `make deploy-pi ROLE=bastion TARGET=192.168.1.12`
+**Then** Pi 3 is configured as bastion-backup identical to Pi 1
+
+**When** I run `make deploy-pi ROLE=dns TARGET=192.168.1.13`
+**Then** Pi 4 is configured as dns-backup identical to Pi 2
+
+**Given** all four Pis are deployed
+**When** I run `make converge` to enable backup sync cron jobs
+**Then** Pi 1 has cron job to sync to Pi 3 every 15 minutes
+**And** Pi 2 has cron job to sync to Pi 4 every 15 minutes
+
+**Given** 20 minutes have elapsed
+**When** I check sync logs on Pi 1 and Pi 2
+**Then** at least one successful sync cycle has completed for each
+
+**Physical Verification:**
+- `make verify-pi TARGET=192.168.1.12` passes (Pi 3)
+- `make verify-pi TARGET=192.168.1.13` passes (Pi 4)
+- From laptop: all four Pis respond to SSH
+- From laptop: both DNS servers (Pi 2 and Pi 4) resolve queries identically
+
+**FRs:** FR4, FR8
+**NFRs:** NFR10
+
+---
+
+### Story 8.6: Run Full Acceptance Test Suite
+
+As the operator,
+I want to run the complete acceptance test suite against the live network,
+So that I can verify end-to-end functionality matches requirements.
+
+**Acceptance Criteria:**
+
+**Given** all four Pis are deployed and syncing
+**When** I run `make test-acceptance`
+**Then** all acceptance tests pass:
+- DNS resolution test (internal and external queries)
+- DDNS propagation test (Namecheap record matches public IP)
+- SOCKS proxy test (SSH tunnel through bastion reaches internal services)
+- Hot backup failover test (can deploy to backup first, then promote)
+
+**Given** I want to verify fleet status
+**When** I run `make status`
+**Then** output shows:
+- 4 hosts: all reachable ✓
+- Services: all ok ✓
+- DNS: internal and external resolution ok ✓
+- Network devices: modem and router reachable ✓
+
+**Given** I want to verify convergence idempotency
+**When** I run `make converge` twice in a row
+**Then** second run shows all hosts "ok" with zero changes
+
+**Physical Verification:**
+- From laptop on LAN: can access all services
+- From phone on cellular: can SSH via bastion to reach internal network
+- Router admin shows correct DHCP/DNS/port-forward config
+- All Pis respond to ping and SSH within 2 seconds
+
+**FRs:** FR14, FR15, FR31, FR32, FR33
+**NFRs:** NFR7, NFR8, NFR10, NFR11, NFR14
+
+---
+
+### Story 8.7: Enable Production Monitoring and Document Operational Procedures
+
+As the operator,
+I want health checks running automatically and operational documentation complete,
+So that the network self-monitors and I can respond to incidents.
+
+**Acceptance Criteria:**
+
+**Given** the network is fully operational
+**When** I enable production monitoring with `make enable-monitoring`
+**Then** health check cron job runs every 15 minutes on Pi 1
+**And** health check logs are written to `/var/log/network-health.log`
+
+**Given** 30 minutes have elapsed
+**When** I inspect health check logs
+**Then** at least 2 successful health check runs are logged with timestamps
+
+**Given** operational documentation is needed
+**When** I review the README operations section
+**Then** it documents:
+- How to check fleet status: `make status`
+- How to deploy changes: backup-first workflow
+- How to roll back DNS: `make rollback-dns`
+- How to investigate failures: health check logs, goss verification
+- Recovery procedure: SD card reflash + `make deploy-pi`
+
+**Physical Verification:**
+- Health checks are logging successfully every 15 minutes
+- Can trigger a test failure (stop CoreDNS) and see it detected in logs
+- README contains clear operational procedures
+- Fresh git clone + README instructions are sufficient for another operator
+
+**FRs:** FR17, FR27, FR32
+**NFRs:** NFR11, NFR14
+
+---
+
+### Epic 8 Retrospective
+
+**To be completed after all stories are PHYSICALLY VERIFIED and OPERATIONAL.**
+
+Questions for retrospective:
+1. What was the gap between "code complete" and "infrastructure operational"?
+2. How should we define "done" for infrastructure stories in future projects?
+3. What deployment risks did we discover that weren't apparent during development?
+4. How effective was the backup-first deployment workflow?
+5. What would we do differently if deploying a fifth Pi or adding a new service?

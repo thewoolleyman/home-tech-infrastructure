@@ -39,6 +39,9 @@ Temporary Items
 # END claude-flow-memory-hooks
 vectors.db
 
+# Python bytecode cache
+__pycache__/
+
 # Never commit unencrypted secrets or private keys
 *.dec.yaml
 age.key
