@@ -105,7 +105,7 @@ development_status:
   # Epic 8: Physical Infrastructure Deployment & Commissioning
   epic-8: in-progress
   8-1-prepare-physical-hardware-and-network-topology: ready-for-dev
-  8-2-bootstrap-first-pi-bastion-with-manual-configuration: backlog
+  8-2-bootstrap-first-pi-bastion-with-manual-configuration: ready-for-dev
   8-3-execute-initial-deployment-bastion-and-dns: backlog
   8-4-configure-router-automation-and-network-cutover: backlog
   8-5-deploy-hot-backups-and-enable-sync: backlog
