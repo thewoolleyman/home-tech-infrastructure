@@ -24,19 +24,9 @@ Set up Pi 1 (bastion) first -- it is the jump host all other Pis connect through
 
 ## Network Setup
 
-The target network uses SSID `FBI_SURVEILLANCE_VAN` on a TP-Link Archer AXE95 router.
+The network uses SSID `FBI_SURVEILLANCE_VAN` on the TP-Link Archer AXE95 router (192.168.1.1).
 
 The Xfinity XB8 modem is in **bridge mode** (enabled 2026-02-01), passing the real public IP directly to the router. No double NAT.
-
-During the transition you may need the Pi on multiple networks:
-
-| Network | SSID | Status | Purpose |
-|---------|------|--------|---------|
-| Current production | `TP-Link_8500` / `TP-Link_8500_5G` | Active | Archer C2300 (temporary router) |
-| Target | `FBI_SURVEILLANCE_VAN` | Not yet deployed | Archer AXE95 (final router) |
-| Old (disabled) | `Big Bopper Bang` / `The Big Bopper` | Disabled | XB8 WiFi (off in bridge mode) |
-
-Configure the **current production** SSID (`TP-Link_8500_5G`) to get the Pi online, then switch to `FBI_SURVEILLANCE_VAN` when the Archer AXE95 is deployed.
 
 ## Step 1: Install Raspberry Pi Imager
 
@@ -68,12 +58,10 @@ In the **General** tab:
 | Username | `deploy` |
 | Password | A temporary password (will be replaced by key-only SSH) |
 | Configure wireless LAN | **Yes** -- see below |
-| SSID | `TP-Link_8500_5G` (current production) or `FBI_SURVEILLANCE_VAN` (target, not yet active) |
+| SSID | `FBI_SURVEILLANCE_VAN` |
 | Password | Your WiFi password |
 | Wireless LAN country | `US` |
 | Locale | Your timezone (e.g. `America/Los_Angeles`) |
-
-> Use `TP-Link_8500_5G` (current production on C2300). The old XB8 SSIDs are disabled. Switch to `FBI_SURVEILLANCE_VAN` when AXE95 is deployed (see Step 6).
 
 In the **Services** tab:
 
@@ -154,48 +142,9 @@ nmcli -t -f active,ssid dev wifi | grep '^yes'
 df -h /
 ```
 
-## Step 6: Configure WiFi Networks
+## Step 6: Set a Static IP
 
-The Pi should already be connected to the SSID you configured in Step 2. To add the other network (so the Pi can switch between old and new routers):
-
-### Add the new network (if you started on the old one)
-
-```bash
-sudo nmcli device wifi connect "FBI_SURVEILLANCE_VAN" password "NEW_WIFI_PASSWORD"
-```
-
-### Add the old network (if you started on the new one)
-
-```bash
-sudo nmcli device wifi connect "TP-Link_8500_5G" password "OLD_WIFI_PASSWORD"
-```
-
-### Set network priority (prefer the new network when both are available)
-
-```bash
-# Higher priority = preferred
-sudo nmcli connection modify "FBI_SURVEILLANCE_VAN" connection.autoconnect-priority 10
-sudo nmcli connection modify "TP-Link_8500_5G" connection.autoconnect-priority 5
-```
-
-### Switch between networks manually
-
-```bash
-# Switch to the new network
-sudo nmcli connection up "FBI_SURVEILLANCE_VAN"
-
-# Switch to the old network
-sudo nmcli connection up "TP-Link_8500_5G"
-
-# Check current connection
-nmcli -t -f active,ssid dev wifi | grep '^yes'
-```
-
-## Step 7: Set a Static IP
-
-Once the Pi is on the correct network, assign a static IP matching the inventory.
-
-### On the new network (FBI_SURVEILLANCE_VAN) -- target config
+The Pi should already be connected to `FBI_SURVEILLANCE_VAN` (configured in Step 2). Now assign a static IP matching the inventory.
 
 ```bash
 sudo nmcli con mod "FBI_SURVEILLANCE_VAN" \
@@ -207,18 +156,6 @@ sudo nmcli con mod "FBI_SURVEILLANCE_VAN" \
 sudo nmcli con up "FBI_SURVEILLANCE_VAN"
 ```
 
-### On the old network (TP-Link_8500_5G) -- temporary during transition
-
-```bash
-sudo nmcli con mod "TP-Link_8500_5G" \
-  ipv4.addresses 192.168.1.10/24 \
-  ipv4.gateway 192.168.1.1 \
-  ipv4.dns "1.1.1.1 9.9.9.9" \
-  ipv4.method manual
-
-sudo nmcli con up "TP-Link_8500_5G"
-```
-
 > Replace `192.168.1.10` with the correct IP for this Pi's role (see table above).
 
 After setting the static IP, reconnect via the new address:
@@ -227,7 +164,7 @@ After setting the static IP, reconnect via the new address:
 ssh deploy@192.168.1.10
 ```
 
-## Step 8: Deploy
+## Step 7: Deploy
 
 From your **Mac** (not the Pi), run the deploy scripts:
 
@@ -241,19 +178,8 @@ make deploy-pi ROLE=bastion TARGET=192.168.1.10
 
 Follow the same steps for each Pi, changing:
 - **Hostname** (Step 2) -- use the hostname from the table
-- **Static IP** (Step 7) -- use the IP from the table
-- **ROLE** (Step 8) -- use `bastion` or `dns` as appropriate
-
-## Cutover: Switching from Old Router to New Router
-
-When the Archer AXE95 is ready to go live:
-
-1. Verify all Pis have both SSIDs configured (Step 6 above)
-2. Set priority so the new SSID is preferred (already done in Step 6)
-3. Power on the Archer AXE95 and configure it with the same subnet (192.168.1.0/24)
-4. Power off the old router
-5. Pis will automatically reconnect to `FBI_SURVEILLANCE_VAN`
-6. Verify each Pi: `ssh deploy@192.168.1.10` (and .11, .12, .13)
+- **Static IP** (Step 6) -- use the IP from the table
+- **ROLE** (Step 7) -- use `bastion` or `dns` as appropriate
 
 ## Troubleshooting
 
