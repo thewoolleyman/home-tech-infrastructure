@@ -1,0 +1,6 @@
+# .sops.yaml -- SOPS configuration for age encryption
+# Public key only -- private key must be in 1Password, NEVER in git.
+creation_rules:
+  - path_regex: .*secrets.*\.yaml$
+    age: >-
+      age1heten6j3esrxmsvj808f8m9zt0ac6s3pvkg5ryjanpsdhgq33v3q3w86m7
