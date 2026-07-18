@@ -1,6 +1,9 @@
 # Local temp/scratch directory
 tmp/
 
+# JetBrains IDE
+.idea/
+
 ### macOS template
 # General
 .DS_Store
