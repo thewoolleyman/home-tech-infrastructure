@@ -42,6 +42,15 @@ Temporary Items
 # END claude-flow-memory-hooks
 vectors.db
 
+# claude-flow runtime vector databases and proven-config state (machine-generated)
+ruvector.db
+agentdb.rvf
+agentdb.rvf.lock
+.claude-flow/harness-active-policy.json
+.claude-flow/policy/
+.claude/proven-config.json
+.claude/.proven-config-version
+
 # Python bytecode cache
 __pycache__/
 
