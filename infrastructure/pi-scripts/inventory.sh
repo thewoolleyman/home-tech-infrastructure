@@ -39,14 +39,26 @@ export PI4_ROLE="dns"
 # --- Server ---
 export POWEREDGE_IP="192.168.1.200"
 
+# --- DHCP pool on the Archer AXE95 (set 2026-11-05) ---
+# Addresses outside the pool (.201-.254) are never leased, so a static
+# assignment there cannot collide with a lease. Inside the pool, a fixed
+# address is safe only as a router reservation.
+export DHCP_POOL_START="192.168.1.2"
+export DHCP_POOL_END="192.168.1.200"
+
 # --- DHCP reservations this repository declares (name|mac|ip) ---
 # Applied on the router by scripts/ops/configure-dhcp-reservations.sh.
-# macbook-m4-max-homelab-worker: the bridged lima0 of the Lima VM on the
-# MacBook M4 Max that runs a homelab K3s worker (livespec-dev-tooling plan
-# homelab-k8s-worker-nodes). Lima derives this MAC from the instance name,
-# so it is stable across VM restarts (macbook-m4-max-info eecd49f0).
-DHCP_RESERVATIONS=(
-    "macbook-m4-max-homelab-worker|52:55:55:ba:a1:61|192.168.1.201"
+# None yet. A device bridged over Wi-Fi cannot be reserved: the router sees
+# its frames under the host's Wi-Fi MAC (MAC NAT), shared with the host.
+DHCP_RESERVATIONS=()
+
+# --- Static addresses set on the device itself (name|ip), outside the pool ---
+# macbook-m4-max-homelab-worker: the Lima VM on the MacBook M4 Max that runs a
+# homelab K3s worker (livespec-dev-tooling plan homelab-k8s-worker-nodes). It
+# is bridged over the Mac's Wi-Fi, so the router lists it under the Mac's MAC
+# 86-CB-DA-37-03-91 and cannot reserve it; the VM sets this address itself.
+STATIC_ADDRESSES=(
+    "macbook-m4-max-homelab-worker|192.168.1.201"
 )
 
 # --- DNS upstream ---

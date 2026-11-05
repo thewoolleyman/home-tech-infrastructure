@@ -4,7 +4,8 @@ set -euo pipefail
 # scripts/ops/configure-dhcp-reservations.sh [verify]
 # Prints the router steps for every DHCP reservation declared in the
 # inventory's DHCP_RESERVATIONS, or with "verify" checks that each reserved
-# address answers and resolves to its declared MAC in the ARP table.
+# address answers and resolves to its declared MAC in the ARP table, and that
+# each STATIC_ADDRESSES entry lies outside the DHCP pool and answers.
 # Overridable commands for testing.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,6 +37,9 @@ print_reservation_steps() {
     echo "  2. Navigate to Advanced > Network > DHCP Server > Address Reservation"
     echo "  3. Add each reservation below that is not already present:"
     echo ""
+    if [ "${#DHCP_RESERVATIONS[@]}" -eq 0 ]; then
+        echo "     (none declared)"
+    fi
     for entry in "${DHCP_RESERVATIONS[@]}"; do
         IFS='|' read -r name mac ip <<< "$entry"
         echo "     ${name}: MAC $(printf '%s' "$mac" | tr 'a-f:' 'A-F-') -> ${ip}"
@@ -67,11 +71,36 @@ verify_reservation() {
     return 0
 }
 
+# last_octet <ip>: the host part of a 192.168.1.x address.
+last_octet() {
+    printf '%s\n' "${1##*.}"
+}
+
+# verify_static <name> <ip>: 0 when <ip> lies outside the pool and answers.
+verify_static() {
+    local name="$1" ip="$2" host
+    host="$(last_octet "$ip")"
+    if [ "$host" -ge "$(last_octet "$DHCP_POOL_START")" ] && [ "$host" -le "$(last_octet "$DHCP_POOL_END")" ]; then
+        echo "FAIL: ${name}: ${ip} is inside the DHCP pool ${DHCP_POOL_START}-${DHCP_POOL_END}."
+        return 1
+    fi
+    if ! $PING -c 1 -W 2 "$ip" >/dev/null 2>&1; then
+        echo "FAIL: ${name}: ${ip} does not answer."
+        return 1
+    fi
+    echo "OK: ${name}: static ${ip} is outside the pool and answers."
+    return 0
+}
+
 verify_all() {
     local entry name mac ip failed=0
     for entry in "${DHCP_RESERVATIONS[@]}"; do
         IFS='|' read -r name mac ip <<< "$entry"
         verify_reservation "$name" "$mac" "$ip" || failed=1
+    done
+    for entry in "${STATIC_ADDRESSES[@]}"; do
+        IFS='|' read -r name ip <<< "$entry"
+        verify_static "$name" "$ip" || failed=1
     done
     return "$failed"
 }
