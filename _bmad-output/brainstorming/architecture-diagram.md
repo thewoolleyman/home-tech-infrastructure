@@ -211,9 +211,9 @@ flowchart LR
 | .13 | Pi 4 - Hot Backup (DNS) | *(standby/secondary for Pi 2)* |
 | .14-.19 | Future Pis | *(reserved)* |
 | .50-.59 | Wireless static clients | (no DNS names needed) |
-| .100-.199 | DHCP dynamic range | *(auto-assigned)* |
+| .2-.200 | DHCP pool on the Archer AXE95 (set 2026-11-05); fixed addresses inside it (.2-.59, .200) MUST be router reservations | *(auto-assigned)* |
 | .200 | PowerEdge server | poweredge.mindlikewater.net |
-| .201-.219 | Future servers | *(reserved)* |
+| .201-.219 | Future servers, static on the device, outside the pool (.201: macbook-m4-max-homelab-worker) | *(static)* |
 | .220-.239 | MetalLB LoadBalancer pool | *(K8s assigns from pool)* |
 | .240-.254 | Reserved | *(future use)* |
 
