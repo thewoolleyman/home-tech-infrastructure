@@ -39,6 +39,16 @@ export PI4_ROLE="dns"
 # --- Server ---
 export POWEREDGE_IP="192.168.1.200"
 
+# --- DHCP reservations this repository declares (name|mac|ip) ---
+# Applied on the router by scripts/ops/configure-dhcp-reservations.sh.
+# macbook-m4-max-homelab-worker: the bridged lima0 of the Lima VM on the
+# MacBook M4 Max that runs a homelab K3s worker (livespec-dev-tooling plan
+# homelab-k8s-worker-nodes). Lima derives this MAC from the instance name,
+# so it is stable across VM restarts (macbook-m4-max-info eecd49f0).
+DHCP_RESERVATIONS=(
+    "macbook-m4-max-homelab-worker|52:55:55:ba:a1:61|192.168.1.201"
+)
+
 # --- DNS upstream ---
 export DNS_UPSTREAM_1="1.1.1.1"
 export DNS_UPSTREAM_2="9.9.9.9"

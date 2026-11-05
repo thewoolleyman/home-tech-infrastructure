@@ -1,7 +1,8 @@
 .PHONY: help lint test test-unit test-python test-integration test-acceptance test-all \
        deploy-pi deploy-backup-first verify-pi prep-pi-image converge \
        health-check bootstrap-secrets status rollback-dns verify-network \
-       modem-status router-status configure-dhcp-dns configure-port-forwards
+       modem-status router-status configure-dhcp-dns configure-port-forwards \
+       configure-dhcp-reservations verify-dhcp-reservations
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | sort | \
@@ -82,3 +83,9 @@ configure-dhcp-dns: ## Point router DHCP DNS to Pi2 (auto or manual). Usage: mak
 
 configure-port-forwards: ## Set up SSH port forwarding on router (auto or manual). Usage: make configure-port-forwards
 	@scripts/ops/configure-port-forwards.sh
+
+configure-dhcp-reservations: ## Print router steps for declared DHCP reservations. Usage: make configure-dhcp-reservations
+	@scripts/ops/configure-dhcp-reservations.sh
+
+verify-dhcp-reservations: ## Verify each declared DHCP reservation answers from its MAC
+	@scripts/ops/configure-dhcp-reservations.sh verify
