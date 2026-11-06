@@ -48,13 +48,31 @@ export DHCP_POOL_END="192.168.1.200"
 
 # --- DHCP reservations this repository declares (name|mac|ip) ---
 # Applied on the router by scripts/ops/configure-dhcp-reservations.sh.
+# This is the router's full Address Reservation table, transcribed from the
+# router by the maintainer on 2026-11-06: names and MACs exactly as the router
+# shows them (several entries share a name; one has none). Addresses inside the
+# .2-.200 pool are fine: a reservation pins that MAC to that address.
+# Notes from the fleet's own records:
+# - gmktec-wired is gmktec-xubuntu's eno1, its K3s node IP.
+# - hp-xubuntu has two: 192.168.1.4 is its wired enp11s0 (the K3s node IP) and
+#   192.168.1.54 its Wi-Fi wlp10s0.
+# - poweredge-xubuntu 192.168.1.200 is the K3s server / API server address.
 # A device bridged over Wi-Fi cannot be reserved: the router sees its frames
-# under the host's Wi-Fi MAC (MAC NAT), shared with the host.
-# gmktec-xubuntu: K3s agent node of the livespec CI fleet; its kubelet pins
-# --node-ip to this address on eno1. Already reserved on the router (recorded
-# 2026-11-06 from the maintainer; the MAC read from the host's eno1).
+# under the host's Wi-Fi MAC (MAC NAT), shared with the host, so such a device
+# sets a static address outside the pool instead (STATIC_ADDRESSES below).
 DHCP_RESERVATIONS=(
-    "gmktec-xubuntu|84:47:09:68:b1:79|192.168.1.156"
+    "gmktec-wired|84-47-09-68-B1-79|192.168.1.156"
+    "idrac-JBS0JB2|F4-8E-38-CE-5F-84|192.168.1.119"
+    "bastion|2C-CF-67-98-5E-74|192.168.1.10"
+    "unnamed|52-55-55-65-5B-27|192.168.1.120"
+    "poweredge-xubuntu|14-18-77-57-75-36|192.168.1.200"
+    "hp-xubuntu|74-12-B3-63-C9-09|192.168.1.54"
+    "macbook|48-65-EE-1F-87-7D|192.168.1.7"
+    "macbook|00-1C-C2-46-20-A9|192.168.1.2"
+    "geekom|38-F7-CD-C5-B9-7F|192.168.1.3"
+    "hp-xubuntu|00-68-EB-AD-93-F9|192.168.1.4"
+    "MacBook-Pro|84-2F-57-A8-DA-8C|192.168.1.52"
+    "macbook|F4-D4-88-5D-5E-41|192.168.1.57"
 )
 
 # --- Static addresses set on the device itself (name|ip), outside the pool ---
