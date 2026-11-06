@@ -48,9 +48,14 @@ export DHCP_POOL_END="192.168.1.200"
 
 # --- DHCP reservations this repository declares (name|mac|ip) ---
 # Applied on the router by scripts/ops/configure-dhcp-reservations.sh.
-# None yet. A device bridged over Wi-Fi cannot be reserved: the router sees
-# its frames under the host's Wi-Fi MAC (MAC NAT), shared with the host.
-DHCP_RESERVATIONS=()
+# A device bridged over Wi-Fi cannot be reserved: the router sees its frames
+# under the host's Wi-Fi MAC (MAC NAT), shared with the host.
+# gmktec-xubuntu: K3s agent node of the livespec CI fleet; its kubelet pins
+# --node-ip to this address on eno1. Already reserved on the router (recorded
+# 2026-11-06 from the maintainer; the MAC read from the host's eno1).
+DHCP_RESERVATIONS=(
+    "gmktec-xubuntu|84:47:09:68:b1:79|192.168.1.156"
+)
 
 # --- Static addresses set on the device itself (name|ip), outside the pool ---
 # macbook-m4-max-homelab-worker: the Lima VM on the MacBook M4 Max that runs a
